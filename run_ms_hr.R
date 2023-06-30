@@ -32,8 +32,8 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
   if (!exists("fhist")) fhist <- "random"
   
   ### MP parameters
-  if (!exists("catch_rule")) catch_rule <- "hr"
-  if (!exists("hr")) hr <- "length"
+  if (!exists("MP")) MP <- "hr"
+  if (!exists("hr_value")) hr_value <- "length"
   if (!exists("multiplier")) multiplier <- 1
   if (!exists("comp_r")) comp_r <- FALSE
   if (!exists("comp_f")) comp_f <- FALSE
@@ -43,9 +43,9 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
   if (!exists("interval")) interval <- 1
   if (!exists("idxB_lag")) idxB_lag <- 1
   if (!exists("idxB_range_3")) idxB_range_3 <- 1
-  if (!exists("upper_constraint")) upper_constraint <- Inf
-  if (!exists("lower_constraint")) lower_constraint <- 0
-  if (!exists("cap_below_b")) cap_below_b <- TRUE
+  if (!exists("upper_constraint")) upper_constraint <- 1.2
+  if (!exists("lower_constraint")) lower_constraint <- 0.7
+  if (!exists("cap_below_b")) cap_below_b <- FALSE
   
   if (!exists("stat_yrs")) stat_yrs <- "all"
   if (!exists("scenario")) scenario <- "sensitivity"
@@ -113,6 +113,7 @@ for (i in req_pckgs) library(package = i, character.only = TRUE)
 ### load additional functions
 source("funs.R")
 source("funs_GA.R")
+source("funs_OM.R")
 
 ### ------------------------------------------------------------------------ ###
 ### setup parallel environment ####
@@ -180,28 +181,6 @@ if (isTRUE(use_MPI)) {
 }
 
 ### ------------------------------------------------------------------------ ###
-### load input  ####
-### ------------------------------------------------------------------------ ###
-
-### stock list
-stocks <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
-stock <- stocks$stock[stock_id]
-names(stock) <- stock
-
-### path to input files
-path_in <- paste0("input/", catch_rule, "/", n_iter, "_", n_yrs, 
-                  "/OM_2_mp_input/", fhist, "/")
-### load stock(s)
-input <- lapply(stock, function(x) {
-  readRDS(paste0(path_in, x, ".rds"))
-})
-
-input <- lapply(input, function(x) {
-  x$args$nblocks <- n_blocks
-  return(x)
-})
-
-### ------------------------------------------------------------------------ ###
 ### manual runs ####
 ### ------------------------------------------------------------------------ ###
 if (isFALSE(ga_search)) {
@@ -209,27 +188,32 @@ if (isFALSE(ga_search)) {
   ### ---------------------------------------------------------------------- ###
   ### MP parameters ####
   ### ---------------------------------------------------------------------- ###
-  
-  ### load reference values
-  hr_ref <- readRDS("input/catch_rates.rds")[[stock]]
-  lhist <- stocks[stocks$stock == stock, ]
-  
+
   ### HR rule parameters & uncertainty
-  hr_params <- data.frame(multiplier = multiplier,
-                          comp_b = comp_b,
-                          idxB_lag = idxB_lag,
-                          idxB_range_3 = idxB_range_3,
-                          interval = interval,
-                          upper_constraint = upper_constraint,
-                          lower_constraint = lower_constraint,
-                          sigmaL = sigmaL,
+  hr_params <- data.frame(stock = stock_id, 
+                          fhist = fhist, 
+                          n_iter = n_iter, 
+                          n_yrs = n_yrs, 
+                          MP = MP, 
+                          scenario = scenario,
+                          idx_sel = idx_sel,
+                          n_blocks = n_blocks,
                           sigmaB = sigmaB,
-                          sigmaL_rho = sigmaL_rho,
+                          sigmaL = sigmaL,
                           sigmaB_rho = sigmaB_rho,
+                          sigmaL_rho = sigmaL_rho,
                           sigmaR = sigmaR,
                           sigmaR_rho = sigmaR_rho,
                           steepness = steepness,
-                          idx_sel = idx_sel,
+                          hr_value = hr_value,
+                          multiplier = multiplier,
+                          comp_b_multiplier = comp_b_multiplier,
+                          idxB_lag = idxB_lag,
+                          idxB_range_3 = idxB_range_3,
+                          interval = interval, 
+                          upper_constraint = upper_constraint,
+                          lower_constraint = lower_constraint, 
+                          cap_below_b = cap_below_b,
                           stringsAsFactors = FALSE)
   
   ### ---------------------------------------------------------------------- ###
@@ -245,146 +229,18 @@ if (isFALSE(ga_search)) {
   . <- foreach(hr_i = seq(nrow(hr_params))) %do_tmp% {
     
     par_i <- hr_params[hr_i, ]
-    
-    input_i <- hr_par(input = input[[1]], lhist = lhist,
-                      hr = hr, hr_ref = hr_ref, 
-                      multiplier = par_i$multiplier,
-                      comp_b = par_i$comp_b, idxB_lag = par_i$idxB_lag, 
-                      idxB_range_3 = par_i$idxB_range_3,
-                      interval = par_i$interval, 
-                      upper_constraint = par_i$upper_constraint,
-                      lower_constraint = par_i$lower_constraint,
-                      cap_below_b = cap_below_b,
-                      idx_sel = par_i$idx_sel)
-    
-    ## --------------------------------------------------------------------- ###
-    ## observation uncertainty ####
-    ## --------------------------------------------------------------------- ###
-    ### change uncertainty?
-    sigmaB_i <- par_i$sigmaB
-    sigmaL_i <- par_i$sigmaL
-    sigmaB_rho_i <- par_i$sigmaB_rho
-    sigmaL_rho_i <- par_i$sigmaL_rho
-    if (par_i$sigmaB != 0.2 | par_i$sigmaL != 0.2 |
-        par_i$sigmaB_rho != 0 | par_i$sigmaL_rho != 0) {
-        
-      #browser()
-      ### create observation noise
-      set.seed(695)
-      dev_idxB <- input_i$oem@deviances$idx$idxB
-      dev_idxL <- input_i$oem@deviances$idx$idxL
-      dev_idxB[] <- rlnoise(n = dims(dev_idxB)$iter, dev_idxB %=% 0, 
-                            sd = sigmaB_i, b = sigmaB_rho_i)
-      dev_idxL[] <- rlnoise(n = dims(dev_idxL)$iter, dev_idxL %=% 0, 
-                            sd = sigmaL_i, b = sigmaL_rho_i)
-      set.seed(696)
-      dev_idxB[, ac(50:150)] <- rlnoise(n = dims(dev_idxB)$iter,
-                                        window(dev_idxB, end = 150) %=% 0,
-                                        sd = sigmaB_i, b = sigmaB_rho_i)
-      dev_idxL[, ac(50:150)] <- rlnoise(n = dims(dev_idxB)$iter,
-                                        window(dev_idxB, end = 150) %=% 0,
-                                        sd = sigmaL_i, b = sigmaL_rho_i)
-      ### insert
-      input_i$oem@deviances$idx$idxB <- dev_idxB
-      input_i$oem@deviances$idx$idxL <- dev_idxL
-      
-      ### update I_trigger
-      I_loss_dev <- apply((input_i$oem@observations$idx$idxB *
-                             dev_idxB)[, ac(50:100)], 6, min)
-      I_trigger_dev <- I_loss_dev * 1.4
-      input_i$ctrl$est@args$I_trigger <- c(I_trigger_dev)
-      input_i$I_loss$idx_dev <- I_loss_dev
-      
-    }
-    
-    ## --------------------------------------------------------------------- ###
-    ## recruitment variability ####
-    ## --------------------------------------------------------------------- ###
-    ### change variability?
-    sigmaR_i <- par_i$sigmaR
-    sigmaR_rho_i <- par_i$sigmaR_rho
-    if (sigmaR_i != 0.6 | sigmaR_rho_i != 0) {
-      
-      #browser()
-      ### retrieve original residuals
-      dev_R_original <- input_i$om@sr@residuals
-      
-      ### create recruitment residuals for projection period
-      set.seed(1)
-      dev_R_new <- rlnoise(dims(dev_R_original)$iter, dev_R_original %=% 0, 
-                           sd = sigmaR_i, b = sigmaR_rho_i)
-      ### replicate residuals from GA paper
-      qnt_150 <- FLQuant(NA, 
-                         dimnames = list(age = "all", year = 0:150,
-                                         iter = dimnames(dev_R_original)$iter))
-      qnt_100 <- FLQuant(NA, 
-                         dimnames = list(age = "all", year = 1:100,
-                                         iter = dimnames(dev_R_original)$iter))
-      set.seed(0)
-      res_150 <- rlnoise(dims(dev_R_original)$iter,
-                         qnt_150 %=% 0, 
-                         sd = sigmaR_i, b = sigmaR_rho_i)
-      set.seed(0)
-      res_100 <- rlnoise(dims(dev_R_original)$iter,
-                         qnt_100 %=% 0, 
-                         sd = sigmaR_i, b = sigmaR_rho_i)
-      ### insert into template
-      yrs_150 <- seq(from = dims(dev_R_original)$minyear,
-                     to = ifelse(dims(dev_R_original)$maxyear >= 150, 
-                                 150, dims(dev_R_original)$maxyear))
-      dev_R_new[, ac(yrs_150)] <- res_150[, ac(yrs_150)]
-      
-      yrs_100 <- seq(from = dims(dev_R_original)$minyear,
-                     to = 100)
-      dev_R_new[, ac(yrs_100)] <- res_100[, ac(yrs_100)]
-      
-      
-      ### insert
-      input_i$om@sr@residuals[] <- dev_R_new
-      
-    }
-    
+
     ### -------------------------------------------------------------------- ###
-    ### recruitment steepness ####
+    ### generate MP input ####
     ### -------------------------------------------------------------------- ###
-    steepness_i <- par_i$steepness
-    if (steepness_i != 0.75) {
-      
-      ### load brp
-      brps <- readRDS("input/brps.rds")
-      brp <- brps[[stock]]
-      
-      ### calculate new recruitment model parameters with new steepness
-      alpha <- (4*steepness_i*c(refpts(brp)["virgin", "rec"])) /
-        (5*steepness_i - 1)
-      beta <- (c(refpts(brp)["virgin", "ssb"]) * (1 - steepness_i)) /
-        (5*steepness_i - 1)
-      
-      ### insert values
-      params(input_i$om@sr)[] <- c(alpha, beta)
-      
-    }
     
-    ### -------------------------------------------------------------------- ###
-    ### update target harvest rate ####
-    ### -------------------------------------------------------------------- ###
-    ### run again in case residuals were changed
-    input_i <- hr_par(input = input_i, lhist = lhist,
-                      hr = hr, hr_ref = hr_ref, 
-                      multiplier = par_i$multiplier,
-                      comp_b = par_i$comp_b, idxB_lag = par_i$idxB_lag, 
-                      idxB_range_3 = par_i$idxB_range_3,
-                      interval = par_i$interval, 
-                      upper_constraint = par_i$upper_constraint,
-                      lower_constraint = par_i$lower_constraint,
-                      cap_below_b = cap_below_b,
-                      idx_sel = par_i$idx_sel)
+    input_i <- do.call(input_mp, as.list(par_i))
     
     ### -------------------------------------------------------------------- ###
     ### paths ####
     ### -------------------------------------------------------------------- ###
     ### generate file name
-    file_pars <- c(hr, par_i$multiplier, par_i$comp_b, par_i$idxB_lag, 
+    file_pars <- c(MP, par_i$multiplier, par_i$comp_b, par_i$idxB_lag, 
                    par_i$idxB_range_3, par_i$interval, 
                    par_i$upper_constraint, par_i$lower_constraint,
                    par_i$sigmaL, par_i$sigmaB, 
