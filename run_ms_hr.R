@@ -1,4 +1,4 @@
-#args <- c("use_MPI=FALSE", "n_workers=0", "n_blocks=1", "popSize=100", "maxiter=100", "run=10", "stock_id=12", "n_iter=500", "n_yrs=50", "fhist='random'", "catch_rule='hr'", "ga_search=TRUE", "idxB_lag=FALSE", "idxB_range_3=FALSE", "exp_b=FALSE", "comp_b_multiplier=FALSE", "interval=FALSE", "multiplier=FALSE", "upper_constraint=c(seq(1,5,0.01),Inf)", "lower_constraint=FALSE", "obj_SSB=TRUE", "obj_F=FALSE", "obj_C=TRUE", "obj_risk=TRUE", "obj_ICV=TRUE", "obj_ICES_PA=FALSE", "obj_ICES_PA2=FALSE", "obj_ICES_MSYPA=FALSE", "collate=TRUE", "scenario='GA'", "stat_yrs='all'", "add_suggestions=FALSE")
+#args <- c("use_MPI=FALSE", "n_workers=0", "n_blocks=1", "popSize=10", "maxiter=5", "run=5", "stock_id=12", "n_iter=500", "n_yrs=50", "fhist='one-way'", "MP='hr'", "ga_search=TRUE", "idxB_lag=FALSE", "idxB_range_3=FALSE", "exp_b=FALSE", "comp_b_multiplier=FALSE", "interval=FALSE", "multiplier=TRUE", "upper_constraint=FALSE", "lower_constraint=FALSE", "obj_SSB=FALSE", "obj_F=FALSE", "obj_C=FALSE", "obj_risk=FALSE", "obj_ICV=FALSE", "obj_ICES_PA=FALSE", "obj_ICES_PA2=FALSE", "obj_ICES_MSYPA=TRUE", "collate=TRUE", "scenario='GA'", "stat_yrs='all'", "add_suggestions=FALSE")
 ### ------------------------------------------------------------------------ ###
 ### run MSE ####
 ### ------------------------------------------------------------------------ ###
@@ -181,41 +181,41 @@ if (isTRUE(use_MPI)) {
 }
 
 ### ------------------------------------------------------------------------ ###
+### MP parameters ####
+### ------------------------------------------------------------------------ ###
+
+### HR rule parameters & uncertainty
+hr_params <- data.frame(stock = stock_id, 
+                        fhist = fhist, 
+                        n_iter = n_iter, 
+                        n_yrs = n_yrs, 
+                        MP = MP, 
+                        scenario = scenario,
+                        idx_sel = idx_sel,
+                        n_blocks = n_blocks,
+                        sigmaB = sigmaB,
+                        sigmaL = sigmaL,
+                        sigmaB_rho = sigmaB_rho,
+                        sigmaL_rho = sigmaL_rho,
+                        sigmaR = sigmaR,
+                        sigmaR_rho = sigmaR_rho,
+                        steepness = steepness,
+                        hr_value = hr_value,
+                        multiplier = multiplier,
+                        comp_b_multiplier = comp_b_multiplier,
+                        idxB_lag = idxB_lag,
+                        idxB_range_3 = idxB_range_3,
+                        interval = interval, 
+                        upper_constraint = upper_constraint,
+                        lower_constraint = lower_constraint, 
+                        cap_below_b = cap_below_b,
+                        stringsAsFactors = FALSE)
+
+### ------------------------------------------------------------------------ ###
 ### manual runs ####
 ### ------------------------------------------------------------------------ ###
 if (isFALSE(ga_search)) {
 
-  ### ---------------------------------------------------------------------- ###
-  ### MP parameters ####
-  ### ---------------------------------------------------------------------- ###
-
-  ### HR rule parameters & uncertainty
-  hr_params <- data.frame(stock = stock_id, 
-                          fhist = fhist, 
-                          n_iter = n_iter, 
-                          n_yrs = n_yrs, 
-                          MP = MP, 
-                          scenario = scenario,
-                          idx_sel = idx_sel,
-                          n_blocks = n_blocks,
-                          sigmaB = sigmaB,
-                          sigmaL = sigmaL,
-                          sigmaB_rho = sigmaB_rho,
-                          sigmaL_rho = sigmaL_rho,
-                          sigmaR = sigmaR,
-                          sigmaR_rho = sigmaR_rho,
-                          steepness = steepness,
-                          hr_value = hr_value,
-                          multiplier = multiplier,
-                          comp_b_multiplier = comp_b_multiplier,
-                          idxB_lag = idxB_lag,
-                          idxB_range_3 = idxB_range_3,
-                          interval = interval, 
-                          upper_constraint = upper_constraint,
-                          lower_constraint = lower_constraint, 
-                          cap_below_b = cap_below_b,
-                          stringsAsFactors = FALSE)
-  
   ### ---------------------------------------------------------------------- ###
   ### go through runs ####
   ### ---------------------------------------------------------------------- ###
@@ -259,7 +259,9 @@ if (isFALSE(ga_search)) {
     ### run  ####
     ### -------------------------------------------------------------------- ###
     
-    res <- do.call(mp, input_i)
+    if (isTRUE(length(stock_id) > 1))
+      stop("Individual MP runs only possible for one stock at a time!")
+    res <- do.call(mp, input_i)[[1]]
     
     ### -------------------------------------------------------------------- ###
     ### save ####

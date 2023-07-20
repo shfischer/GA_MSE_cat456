@@ -381,7 +381,7 @@ input_mp <- function(stocks,
   })
   names(input_list) <- stocks
   
-  if (identical(length(input_list), 1L)) input_list <- input_list[[1]]
+  #if (identical(length(input_list), 1L)) input_list <- input_list[[1]]
   
   return(input_list)
   
