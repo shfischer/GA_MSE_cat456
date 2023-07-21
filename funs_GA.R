@@ -2,7 +2,8 @@
 ### objective function for multi species run ####
 ### ------------------------------------------------------------------------ ###
 mp_fitness <- function(params, inp_file, path, check_file = FALSE,
-                       catch_rule, 
+                       summarise_runs = FALSE,
+                       MP, 
                        return_res = FALSE,
                        collapse_correction = TRUE,
                        obj_SSB = FALSE, obj_C = FALSE, obj_F = FALSE,
@@ -22,7 +23,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     . <- foreach(i = 1:getDoParWorkers()) %dopar% {invisible(gc())}
   
   ### rounding of arguments
-  if (identical(catch_rule, "catch_rule")) {
+  if (identical(MP, "rfb")) {
     params[1:4] <- round(params[1:4])
     params[5:7] <- round(params[5:7], 1)
     params[8] <- round(params[8])
@@ -30,7 +31,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     params[10:11] <- round(params[10:11], 2)
     ### fix NaN for upper_constraint
     if (is.nan(params[10])) params[10] <- Inf
-  } else if (identical(catch_rule, "hr")) {
+  } else if (identical(MP, "hr")) {
     ### idxB_lag, idxB_range_3, interval [years]
     params[c(1, 2, 5)] <- round(params[c(1, 2, 5)])
     ### exp_b, comp_b_multiplier
@@ -42,6 +43,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
   }
   
   ### check for files?
+  run_mp <- TRUE ### initialise variable
   if (isTRUE(check_file)) {
     ### current run
     run_i <- paste0(params, collapse = "_")
@@ -52,8 +54,24 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
                                collapse = "/"), "/")
     ### check if path exists
     if (!dir.exists(path)) dir.create(path, recursive = TRUE)
-    ### check if run already exists
-    if (isTRUE(file.exists(paste0(path, run_i, ".rds")))) {
+    
+    ### check if summary file is used
+    if (isTRUE(summarise_runs) & 
+        isTRUE(file.exists(paste0(path, "runs.rds")))) {
+      ### load all available runs
+      stats_all <- readRDS(paste0(path, "runs.rds"))
+      ### check if current exists and use results
+      if (isTRUE(run_i %in% names(stats_all))) {
+        stats <- stats_all[[run_i]]$stats
+        run_mp <- FALSE
+      } else {
+        run_mp <- TRUE
+      }
+    }
+    
+    ### check if run already exists in individual file (legacy approach)
+    if (isTRUE(file.exists(paste0(path, run_i, ".rds"))) &
+        isTRUE(run_mp)) {
       ### load stats
       stats <- readRDS(paste0(path, run_i, ".rds"))
       ### set flag for running MP
@@ -62,7 +80,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
       if (!any(stat_yrs %in% c("all", "more"))) {
         if (!any(grepl(x = rownames(stats), pattern = stat_yrs))) run_mp <- TRUE
       }
-    } else {
+    } else if (isTRUE(run_mp)) {
       ### check if run exist in larger group
       dir_i <- paste0(stock_i, collapse = "_")
       dirs_i <- setdiff(x = dir(path = base_path, pattern = dir_i),
@@ -89,15 +107,9 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
           stats <- stats[, stock_i]
           ### do not run MP
           run_mp <- FALSE
-        } else {
-          run_mp <- TRUE
-        }
-      } else {
-        run_mp <- TRUE
-      }
+        } 
+      } 
     }
-  } else {
-    run_mp <- TRUE
   }
   
   if (isTRUE(run_mp)) {
@@ -107,7 +119,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     
     ### insert arguments into input object for mp
     ### rfb-rule
-    if (identical(catch_rule, "catch_rule")) {
+    if (identical(MP, "rfb")) {
       input <- lapply(input, function(x) {
         x$ctrl$est@args$idxB_lag     <- params[1]
         x$ctrl$est@args$idxB_range_1 <- params[2]
@@ -125,7 +137,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         return(x)
       })
     ### harvest rates
-    } else if (identical(catch_rule, "hr")) {
+    } else if (identical(MP, "hr")) {
       input <- lapply(input, function(x) {
         
         
@@ -274,7 +286,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
   }
   
   ### housekeeping
-  rm(res_mp, input)
+  suppressWarnings(rm(res_mp, input))
   invisible(gc())
   if (getDoParWorkers() > 1)
     . <- foreach(i = 1:getDoParWorkers()) %dopar% {invisible(gc())}
@@ -403,3 +415,85 @@ penalty <- function(x, negative = FALSE, max = 1,
   if (isTRUE(negative)) y <- -y
   return(y)
 }
+
+### ------------------------------------------------------------------------ ###
+### postFitness - collate results and delete files from individual runs  ####
+### ------------------------------------------------------------------------ ###
+mp_postFitness <- function(x, path, check_file, MP, summarise_runs = FALSE,
+                           ...) {
+  
+    if (isTRUE(summarise_runs)) {
+      
+    ### population - MP parameters
+    pop <- as.data.frame(x@population)
+    
+    ### round parameters
+    if (identical(MP, "hr")) {
+      colnames(pop) <- c("idxB_lag", "idxB_range_3", "exp_b", "comp_b_multiplier",
+                         "interval", "multiplier",
+                         "upper_constraint", "lower_constraint")
+      ### idxB_lag, idxB_range_3, interval [years]
+      pop$idxB_lag <- round(pop$idxB_lag)
+      pop$idxB_range_3 <- round(pop$idxB_range_3)
+      pop$interval <- round(pop$interval)
+      ### exp_b, comp_b_multiplier
+      pop$exp_b <- round(pop$exp_b, 1)
+      pop$comp_b_multiplier <- round(pop$comp_b_multiplier, 1)
+      ### multiplier, upper_constraint, lower_constraint
+      pop$multiplier <- round(pop$multiplier, 2)
+      pop$upper_constraint <- round(pop$upper_constraint, 2)
+      pop$lower_constraint <- round(pop$lower_constraint, 2)
+      ### fix NaN for upper_constraint
+      if (any(is.nan(pop$upper_constraint))) {
+        pop$upper_constraint[is.nan(pop$upper_constraint)] <- Inf
+      }
+    }
+    ### file names
+    pop$name <- apply(pop, 1, paste0, collapse = "_")
+    ### remove duplicates
+    pop <- unique(pop)
+    
+    ### load summary statistics for each run
+    stats_new <- lapply(seq(nrow(pop)), function(y) {
+      ### get MP parameters
+      pars_y <- unlist(pop[y, -ncol(pop)])
+      ### check if file exists
+      if (file.exists(paste0(path, pop$name[y], ".rds"))) {
+        ### load summary statistics
+        stats_y <- readRDS(paste0(path, pop$name[y], ".rds"))
+        ### combine and return
+        list(pars = pars_y, stats = stats_y)
+      } else {
+        return(NULL)
+      }
+    })
+    names(stats_new) <- pop$name
+    
+    ### check if summary file exists
+    if (!file.exists(paste0(path, "runs.rds"))) {
+      ### save file, in first generation of GA search
+      saveRDS(stats_new, file = paste0(path, "runs.rds"))
+    } else {
+      ### load file
+      stats <- readRDS(paste0(path, "runs.rds"))
+      ### add new runs
+      stats_add_names <- setdiff(names(stats_new), names(stats))
+      if (isTRUE(length(stats_add_names) > 0)) {
+        stats <- append(stats,
+                        stats_new[names(stats_new) %in% stats_add_names])
+        stats <- stats[unique(names(stats))]
+        ### save updated file
+        saveRDS(stats, file = paste0(path, "runs.rds"))
+      }
+  
+    }
+    
+    ### delete individual files
+    . <- suppressWarnings(file.remove(paste0(path, pop$name, ".rds")))
+    
+  }
+  
+  return(x)
+  
+}
+

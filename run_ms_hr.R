@@ -77,7 +77,7 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
     if (!exists("maxiter")) stop("maxiter missing")
     if (!exists("stock_id")) stop("stock_id missing")
     if (!exists("run")) run <- maxiter
-    if (!exists("collate")) collate <- TRUE
+    if (!exists("collate")) collate <- FALSE
     ### objective function elements
     if (!exists("obj_SSB")) obj_SSB <- TRUE
     if (!exists("obj_F")) obj_F <- FALSE
@@ -321,40 +321,10 @@ if (isFALSE(ga_search)) {
   ### prepare OM ####
   ### ---------------------------------------------------------------------- ###
   
-  hr_refs <- readRDS("input/catch_rates.rds")[stock]
-  lhist <- split(stocks[stocks$stock == stock, ], seq_along(stock))
-  
-  ### HR rule parameters & uncertainty
-  hr_params <- data.frame(multiplier = multiplier,
-                          comp_b = comp_b,
-                          exp_b = exp_b,
-                          comp_b_multiplier = comp_b_multiplier,
-                          idxB_lag = idxB_lag,
-                          idxB_range_3 = idxB_range_3,
-                          interval = interval,
-                          upper_constraint = upper_constraint,
-                          lower_constraint = lower_constraint,
-                          sigmaL = sigmaL,
-                          sigmaB = sigmaB,
-                          sigmaL_rho = sigmaL_rho,
-                          sigmaB_rho = sigmaB_rho,
-                          sigmaR = sigmaR,
-                          sigmaR_rho = sigmaR_rho)
-  par_i <- hr_params[1, ]
-  
-  input <- lapply(seq_along(input), function(x) {
-    hr_par(input = input[[x]], lhist = lhist[[x]],
-           hr = hr, hr_ref = hr_ref, 
-           multiplier = par_i$multiplier,
-           comp_b = par_i$comp_b, idxB_lag = par_i$idxB_lag, 
-           idxB_range_3 = par_i$idxB_range_3,
-           interval = par_i$interval, 
-           upper_constraint = par_i$upper_constraint,
-           lower_constraint = par_i$lower_constraint,
-           cap_below_b = cap_below_b)
-  })
-  names(input) <- stock
-  
+  if (isTRUE(nrow(hr_params) > 1)) 
+    stop("GA search only possible for one parameter (set)!")
+  input <- do.call(input_mp, as.list(hr_params))
+
   ### ------------------------------------------------------------------------ ###
   ### GA set-up ####
   ### ------------------------------------------------------------------------ ###
@@ -424,9 +394,9 @@ if (isFALSE(ga_search)) {
     scn_pars[which(scn_pars %in% par_fixed)], val_fixed)
   scn_pars_c <- paste0(scn_pars, collapse = "-")
   #scenario <- "trial"
-  path_out <- paste0("output/", catch_rule, "/", n_iter, "_", n_yrs, "/", 
+  path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/", 
                      scenario, "/", fhist, "/",
-                     paste0(stock, collapse = "_"), "/")
+                     paste0(names(input), collapse = "_"), "/")
   dir.create(path_out, recursive = TRUE)
   
   ### objective function elements
@@ -522,11 +492,13 @@ if (isFALSE(ga_search)) {
               obj_ICES_PA2 = obj_ICES_PA2, obj_ICES_MSYPA = obj_ICES_MSYPA,
               stat_yrs = stat_yrs, risk_threshold = risk_threshold,
               path = path_out, check_file = check_file,
-              catch_rule = catch_rule,
+              MP = MP,
               suggestions = ga_suggestions, lower = ga_lower, upper = ga_upper,
               names = ga_names,
               maxiter = maxiter, popSize = popSize, run = run,
-              monitor = TRUE, keepBest = TRUE, parallel = cl1, seed = 1)
+              summarise_runs = TRUE,
+              postFitness = mp_postFitness,
+              keepBest = TRUE, parallel = cl1, seed = 1)
   })
   
   ### save result
