@@ -81,8 +81,8 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
 
 est_comps <- function(stk, idx, tracking, args,
                       comp_r = FALSE, comp_f = FALSE, comp_b = FALSE,
-                      comp_i = FALSE, comp_c = TRUE, comp_m = FALSE,
-                      comp_hr = FALSE,
+                      comp_i = FALSE, comp_c = FALSE, comp_A = TRUE,
+                      comp_m = FALSE, comp_hr = FALSE,
                       idxB_lag = 1, idxB_range_1 = 2, idxB_range_2 = 3,
                       idxB_range_3 = 1,
                       catch_lag = 1, catch_range = 1,
@@ -93,6 +93,7 @@ est_comps <- function(stk, idx, tracking, args,
                       ...) {
   
   ay <- args$ay
+  iy <- args$iy
   
   ### component r: index trend
   if (isTRUE(comp_r)) {
@@ -139,10 +140,13 @@ est_comps <- function(stk, idx, tracking, args,
   }
   tracking["comp_i", ac(ay)] <- i_res
   
-  ### current catch
+  ### current catch/advice
   if (isTRUE(comp_c)) {
     c_res <- est_c(ay = ay, catch = catch(stk), catch_lag = catch_lag, 
                    catch_range = catch_range)
+  } else if (isTRUE(comp_A)) {
+    c_res <- est_A(ay = ay, iy = iy, catch = catch(stk), catch_lag = catch_lag,
+                   catch_range = catch_range, tracking = tracking)
   } else {
     c_res <- 1
   }
@@ -284,6 +288,24 @@ est_c <- function(catch, ay,
   
   catch_yrs <- seq(to = ay - catch_lag, length.out = catch_range)
   catch_current <- yearMeans(catch[, ac(catch_yrs)])
+  return(catch_current)
+  
+}
+### recent advice
+est_A <- function(catch, ay, iy,
+                  catch_lag, catch_range, tracking,
+                  ...) {
+  
+  catch_yrs <- seq(to = ay - catch_lag, length.out = catch_range)
+  ### first year - use catch
+  if (identical(ay, iy)) {
+    catch_current <- yearMeans(catch[, ac(catch_yrs)])
+  ### other years - use advice
+  } else {
+    ### yrs - 1 because advice for ay+1 is saved in ay in tracking object
+    catch_current <- yearMeans(tracking["metric.is", ac(catch_yrs - 1)])
+  }
+  
   return(catch_current)
   
 }

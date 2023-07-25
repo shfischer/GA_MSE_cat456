@@ -120,15 +120,30 @@ input_mp <- function(stocks,
       idxB = ssb(stk) %=% NA_real_,
       idxL = ssb(stk) %=% NA_real_,
       PA_status = ssb(stk) %=% NA_integer_)
-    oem <- FLoem(method = obs_generic,
-                 observations = list(stk = stk, idx = idx), 
-                 deviances = list(stk = FLQuant(), idx = idx),
-                 args = list(idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
-                             lngth = FALSE, lngth_dev = FALSE,
-                             lngth_par = pars_l,
-                             PA_status = FALSE, PA_status_dev = FALSE,
-                             PA_Bmsy = c(refpts(brps[[stock]])["msy", "ssb"]), 
-                             PA_Fmsy = c(refpts(brps[[stock]])["msy", "harvest"])))
+    if (identical(MP, "hr")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
+                               lngth = FALSE, lngth_dev = FALSE,
+                               lngth_par = pars_l,
+                               PA_status = FALSE, PA_status_dev = FALSE,
+                               PA_Bmsy = c(refpts(brps[[stock]])["msy", "ssb"]), 
+                               PA_Fmsy = c(refpts(brps[[stock]])["msy", "harvest"])))
+    } else if (identical(MP, "const_catch")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
+                               lngth = FALSE, lngth_dev = FALSE,
+                               #lngth_par = FLPar(),
+                               PA_status = TRUE, PA_status_dev = FALSE,
+                               PA_Bmsy = Inf, ### i.e. B always below Bmsy/2
+                               PA_Fmsy = 0 ### i.e. F always above Fmsy
+                               ### -> always apply buffer
+                               ))
+      
+    }
     ### create biomass index
     ### update index if not total stock biomass
     if (identical(idx_sel, "ssb")) {
@@ -212,6 +227,15 @@ input_mp <- function(stocks,
       set.seed(2)
       PA_status_dev["negative"] <- rbinom(n = PA_status_dev["negative"], 
                                           size = 1, prob = 1 - 0.4216946)
+      oem@deviances$idx$PA_status <- PA_status_dev
+    } else if (isTRUE(MP %in% c("const_catch"))) {
+      PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
+                                                   year = dimnames(stk)$year, 
+                                                   iter = dimnames(stk)$iter))
+      set.seed(1)
+      PA_status_dev["positive"] <- 1
+      set.seed(2)
+      PA_status_dev["negative"] <- 1
       oem@deviances$idx$PA_status <- PA_status_dev
     }
     
@@ -328,30 +352,37 @@ input_mp <- function(stocks,
                                    lower_constraint = lower_constraint, 
                                    cap_below_b = cap_below_b))
       ))
-      
-      
-      
-      # ### parameters for components
-      # pars_est <- list(
-      #   comp_r = FALSE, comp_f = FALSE, comp_b = FALSE,
-      #   comp_c = FALSE, comp_m = hr_val,
-      #   idxB_lag = 1, idxB_range_1 = 2, idxB_range_2 = 3, idxB_range_3 = 1,
-      #   catch_lag = 1, catch_range = 1,
-      #   interval = 1,
-      #   idxL_lag = 1, idxL_range = 1,
-      #   exp_r = 1, exp_f = 1, exp_b = 1,
-      #   Lref = rep((lhist$linf + 2*1.5*c(pars_l["Lc"])) / (1 + 2*1.5), n_iter),
-      #   B_lim = rep(brps[[stock]]@Blim, n_iter),
-      #   I_trigger = c(I_loss$idx_dev * 1.4), ### default, can be overwritten later
-      #   # pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
-      #   # upper_constraint = Inf,
-      #   # lower_constraint = 0
-      # )
     
+    } else if (identical(MP, "const_catch")) {
+ 
+      ### set up MP ctrl object
+      ctrl <- ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_comps,
+                      args = list(comp_r = FALSE, 
+                                  comp_f = FALSE, 
+                                  comp_c = FALSE,
+                                  comp_A = TRUE,
+                                  comp_b = FALSE,
+                                  comp_m = FALSE,
+                                  pa_buffer = TRUE, 
+                                  comp_i = FALSE, 
+                                  idxB_lag = idxB_lag,
+                                  pa_size = pa_size, 
+                                  pa_duration = pa_duration,
+                                  catch_lag = 0
+                      )),
+        phcr = mseCtrl(method = phcr_comps,
+                       args = list()),
+        hcr = mseCtrl(method = hcr_comps,
+                      args = list(interval = interval)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval))
+      ))
+      
     }
     
     ### tracking
-    if (isTRUE(MP %in% c("rfb", "hr", "2over3"))) {
+    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "const_catch"))) {
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
       
