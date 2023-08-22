@@ -8,6 +8,7 @@
 ### ------------------------------------------------------------------------ ###
 
 args <- commandArgs(TRUE)
+if (exists(x = "args_local")) args <- append(args, args_local)
 print("arguments passed on to this script:")
 print(args)
 
