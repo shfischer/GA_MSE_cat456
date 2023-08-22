@@ -56,7 +56,7 @@ described in:
 
 The root folder contains the following R scripts:
 
-- `OM_hr.R`: This script creates the operating models (OMs),
+- `OM.R`: This script creates the operating models (OMs),
 - `funs.R` contains functions and methods used for the creation of the
   operating models and for running the MSE,
 - `funs_GA.R` contains the function used in the optimisation procedure,
