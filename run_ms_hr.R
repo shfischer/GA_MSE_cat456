@@ -251,7 +251,7 @@ if (isFALSE(ga_search)) {
     file_pars <- file_pars[!is.na(file_pars)]
     file_out <- paste0(file_pars, collapse = "_")
     path_out <- paste0("output/hr/", n_iter, "_", n_yrs, "/", scenario, "/",
-                       fhist, "/", paste0(stock, collapse = "_"), "/")
+                       fhist, "/", paste0(names(input_i), collapse = "_"), "/")
     dir.create(path_out, recursive = TRUE)
     ### skip if run already exists
     if (file.exists(paste0(path_out, "stats_", file_out, ".rds"))) return(NULL)
@@ -262,7 +262,7 @@ if (isFALSE(ga_search)) {
     
     if (isTRUE(length(stock_id) > 1))
       stop("Individual MP runs only possible for one stock at a time!")
-    res <- do.call(mp, input_i)[[1]]
+    res <- do.call(mp, input_i[[1]])
     
     ### -------------------------------------------------------------------- ###
     ### save ####
@@ -276,10 +276,10 @@ if (isFALSE(ga_search)) {
     ### -------------------------------------------------------------------- ###
     
     if (isTRUE(stats)) {
-      res_stats <- mp_stats(input = list(input_i), res_mp = list(res), 
+      res_stats <- mp_stats(input = input_i, res_mp = list(res), 
                             collapse_correction = TRUE,
                             stat_yrs = stat_yrs)
-      res_stats <- cbind(stock = stock, par_i, t(res_stats))
+      res_stats <- cbind(stock = names(input_i), par_i, t(res_stats))
       saveRDS(object = res_stats, 
               file = paste0(path_out, "stats_", file_out, ".rds"))
     }
