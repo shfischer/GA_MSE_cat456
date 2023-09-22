@@ -7,7 +7,7 @@ input_mp <- function(stocks,
                      fhist, ### fishing history, e.g. "one-way"
                      n_iter = 500, ### number of iterations
                      n_yrs = 50, ### number of years for MP
-                     MP, ### e.g. "hr"
+                     MP, ### e.g. "hr", "const_catch", "CC_f"
                      hist_yr_min = 50, ### first year
                      scenario = "",
                      idx_sel = "tsb", ### index selectivity
@@ -107,7 +107,7 @@ input_mp <- function(stocks,
   
     
     ### length data
-    if (MP %in% c("rfb", "hr")) {
+    if (MP %in% c("rfb", "hr", "CC_f")) {
       pars_l <- FLPar(a = lhist$a,
                       b = lhist$b,
                       Lc = calc_lc(stk = stk[, ac(75:100)], 
@@ -142,6 +142,18 @@ input_mp <- function(stocks,
                                PA_Fmsy = 0 ### i.e. F always above Fmsy
                                ### -> always apply buffer
                                ))
+    } else if (identical(MP, "CC_f")) {
+        oem <- FLoem(method = obs_generic,
+                     observations = list(stk = stk, idx = idx), 
+                     deviances = list(stk = FLQuant(), idx = idx),
+                     args = list(idx_dev = FALSE, ssb_idx = FALSE, tsb_idx = FALSE,
+                                 lngth = TRUE, lngth_dev = TRUE,
+                                 lngth_par = pars_l,
+                                 PA_status = TRUE, PA_status_dev = FALSE,
+                                 PA_Bmsy = Inf, ### i.e. B always below Bmsy/2
+                                 PA_Fmsy = 0 ### i.e. F always above Fmsy
+                                 ### -> always apply buffer
+                     ))
       
     }
     ### create biomass index
@@ -207,7 +219,7 @@ input_mp <- function(stocks,
       
     ### length index
     ### only include when required for MP
-    if (isTRUE(MP %in% c("rfb"))) {
+    if (isTRUE(MP %in% c("rfb", "CC_f"))) {
       oem@args$lngth <- TRUE
       oem@args$lngth_dev <- TRUE
       oem@args$lngth_par <- pars_l
@@ -237,6 +249,20 @@ input_mp <- function(stocks,
       set.seed(2)
       PA_status_dev["negative"] <- 1
       oem@deviances$idx$PA_status <- PA_status_dev
+    } else if (identical(MP, "CC_f")) {
+      PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
+                                                   year = dimnames(stk)$year, 
+                                                   iter = dimnames(stk)$iter))
+      set.seed(1)
+      PA_status_dev["positive"] <- 1
+      set.seed(2)
+      PA_status_dev["negative"] <- 1
+      oem@deviances$idx$PA_status <- PA_status_dev
+      
+      set.seed(696)
+      oem@deviances$idx$idxL <- rlnoise(n = dims(idx$idxL)$iter, idx$idxL %=% 0, 
+                                        sd = 0.2, b = 0)
+        
     }
     
     oem@deviances$idx$sel <- oem@deviances$idx$sel %=% 1
@@ -379,10 +405,37 @@ input_mp <- function(stocks,
                        args = list(interval = interval))
       ))
       
+    } else if (identical(MP, "CC_f")) {
+      
+      ### set up MP ctrl object
+      ctrl <- ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_comps,
+                      args = list(comp_r = FALSE, 
+                                  comp_f = FALSE, 
+                                  comp_c = FALSE,
+                                  comp_A = TRUE,
+                                  comp_b = FALSE,
+                                  comp_m = FALSE,
+                                  pa_buffer = FALSE, 
+                                  pa_buffer_conditional = TRUE,
+                                  comp_i = FALSE, 
+                                  idxB_lag = idxB_lag,
+                                  pa_size = pa_size, 
+                                  pa_duration = pa_duration,
+                                  catch_lag = 0
+                      )),
+        phcr = mseCtrl(method = phcr_comps,
+                       args = list()),
+        hcr = mseCtrl(method = hcr_comps,
+                      args = list(interval = interval)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval))
+      ))
+      
     }
     
     ### tracking
-    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "const_catch"))) {
+    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "const_catch", "CC_f"))) {
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
       
