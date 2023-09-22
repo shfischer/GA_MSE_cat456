@@ -407,6 +407,8 @@ input_mp <- function(stocks,
       
     } else if (identical(MP, "CC_f")) {
       
+      ### calculate reference length FL=M
+      Lref <- 0.75 * pars_l["Lc"] + 0.25 * lhist$linf
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
@@ -422,7 +424,8 @@ input_mp <- function(stocks,
                                   idxB_lag = idxB_lag,
                                   pa_size = pa_size, 
                                   pa_duration = pa_duration,
-                                  catch_lag = 0
+                                  catch_lag = 0,
+                                  Lref = Lref
                       )),
         phcr = mseCtrl(method = phcr_comps,
                        args = list()),
