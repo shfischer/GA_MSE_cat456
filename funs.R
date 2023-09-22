@@ -89,6 +89,7 @@ est_comps <- function(stk, idx, tracking, args,
                       Lref, I_trigger,
                       idxL_lag = 1, idxL_range = 1,
                       pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
+                      pa_buffer_conditional = FALSE,
                       Bmsy = NA,
                       ...) {
   
@@ -128,6 +129,18 @@ est_comps <- function(stk, idx, tracking, args,
     b_res <- est_pa(idx = idx$PA_status, ay = ay, 
                     tracking = tracking, idxB_lag = idxB_lag,
                     pa_size = pa_size, pa_duration = pa_duration)
+  }
+  
+  ### conditional PA buffer - use length
+  if (isTRUE(pa_buffer_conditional)) {
+    b_res <- est_pa_conditional(ay = ay, 
+                                tracking = tracking, 
+                                idxB_lag = idxB_lag,
+                                pa_size = pa_size, 
+                                pa_duration = pa_duration,
+                                idx = idx$idxL,
+                                Lref = Lref, idxL_range = idxL_range, 
+                                idxL_lag = idxL_lag)
   }
   tracking["comp_b", ac(ay)] <- b_res
   
@@ -265,6 +278,60 @@ est_pa <- function(idx, ay, tracking, pa_size, pa_duration, idxB_lag,
   pos_apply <- intersect(pos_check, pos_negative)
   
   return(ifelse(seq(dims(last)$iter) %in% pos_apply, pa_size, 1))
+  
+}
+
+est_pa_conditional <- function(Lref, ### reference length (LF=M)
+                               idx, ### length index
+                               ay, ### current (intermediate) year
+                               idxL_range = 1, ### number of years for length
+                               idxL_lag = 1, ### time lag relative to ay
+                               tracking, ### track metrics
+                               pa_duration, ### frequency of buffer application
+                               pa_size, 
+                               ...) {
+  
+  ### 1st: compare mean catch length to reference -> PA status
+  
+  ### if fewer iterations provided expand
+  if (isTRUE(length(Lref) < dims(idx)$iter)) {
+    Lref <- rep(Lref, dims(idx)$iter)
+    ### if more iterations provided, subset
+  } else if (isTRUE(length(Lref) > dims(idx)$iter)) {
+    Lref <- Lref[an(dimnames(idx)$iter)]
+  }
+  
+  ### get mean length in catch
+  idx_yrs <- seq(to = ay - idxL_range, length.out = idxL_lag)
+  idx_mean <- yearMeans(idx[, ac(idx_yrs)])
+  ### length relative to reference
+  idx_ratio <- c(idx_mean / Lref)
+  ### avoid negative values
+  idx_ratio <- ifelse(idx_ratio > 0, idx_ratio, 0)
+  ### avoid NAs, happens if catch = 0
+  idx_ratio <- ifelse(is.na(idx_ratio), 1, idx_ratio)
+  
+  ### buffer
+  
+  ### find last year in which buffer was applied
+  last <- apply(tracking["comp_b",,, drop = FALSE], 6, FUN = function(x) {#browser()
+    ### positions (years) where buffer was applied
+    yr <- dimnames(x)$year[which(x < 1)]
+    ### return -Inf if buffer was never applied
+    ifelse(length(yr) > 0, as.numeric(yr), -Inf)
+  })
+  ### find iterations to check 
+  pos_check <- which(last <= (ay - pa_duration))
+  ### when to apply buffer - if Lmean < LF=M == idx_ratio <= 0
+  pos_negative <- which(idx_ratio <= 1)
+  ### apply only if buffer applications need to be checked and status is negative
+  pos_apply <- intersect(pos_check, pos_negative)
+  
+  ### initialise buffer value
+  res <- rep(1, dim(tracking)[6])
+  res[pos_apply] <- pa_size
+  
+  return(res)
   
 }
 
