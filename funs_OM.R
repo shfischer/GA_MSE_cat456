@@ -408,7 +408,7 @@ input_mp <- function(stocks,
     } else if (identical(MP, "CC_f")) {
       
       ### calculate reference length FL=M
-      Lref <- 0.75 * pars_l["Lc"] + 0.25 * lhist$linf
+      Lref <- c(0.75 * pars_l["Lc"] + 0.25 * lhist$linf)
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
