@@ -162,76 +162,279 @@ res_def_colours <- c("one-way" = brewer.pal(n = 4, name = "Set1")[1],
 res_def_linetype <- c("one-way" = "solid", 
                       #"roller-coaster" = "1212", 
                       "random" = "3232")
+### ggplot2 bug... need to plot all elements individually
+# p_sens_status <- stats_sens_plot %>%
+#   filter(sensitivity == "stock_status" &
+#            SSB0_rel <= 2) %>%
+#   ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist,
+#              linetype = fhist)) +
+#   stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
+#               show.legend = FALSE) +
+#   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
+#   geom_blank(data = df_blank, aes(x = x, y = value)) +
+#   facet_grid(name ~ "'\ \ \ \ \ \ Initial\nstock status'", scales = "free",
+#              labeller = "label_parsed",
+#              switch = "y") +
+#   scale_linetype_manual("fishing history", values = res_def_linetype) +
+#   scale_colour_manual("fishing history", values = res_def_colours) +
+#   scale_fill_manual("fishing history", values = res_def_colours) +
+#   scale_x_continuous(limits = c(-0.05, 2.05)) +
+#   labs(x = expression(SSB[y == 0]/B[MSY])) +
+#   theme_bw(base_size = 8) +
+#   theme(strip.placement = "outside",
+#         strip.text.y = element_text(size = 8),
+#         strip.text.x = element_text(margin = margin(8, 0, 1.2, 0)),
+#         strip.background.y = element_blank(),
+#         axis.title.y = element_blank(),
+#         strip.switch.pad.grid = unit(0, "pt"),
+#         plot.margin = unit(c(2, 2, 4, 4), "pt"))
 
-p_sens_status <- stats_sens_plot %>%
-  filter(sensitivity == "stock_status" &
+# p_sens_period <- stats_sens_plot %>%
+#   filter(sensitivity == "period" &
+#            stat_metric == "average") %>%
+#   ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
+#              linetype = fhist)) +
+#   geom_vline(xintercept = 50, size = 0.4, colour = "grey") +
+#   stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
+#   geom_point(size = 0.15, stroke = 0, shape = 21) +
+#   geom_blank(data = df_blank, aes(x = x, y = value)) +
+#   facet_grid(name ~ "'Implementation\n\ \ \ \ \ \ \ period'", scales = "free", 
+#              labeller = "label_parsed",
+#              switch = "y") +
+#   scale_linetype_manual("fishing history", values = res_def_linetype) +
+#   scale_colour_manual("fishing history", values = res_def_colours) +
+#   scale_fill_manual("fishing history", values = res_def_colours) +
+#   labs(x = "years") +
+#   theme_bw(base_size = 8) +
+#   theme(strip.placement = "outside",
+#         strip.text.y = element_blank(),
+#         strip.text.x = element_text(margin = margin(8, 0, 0, 0)),
+#         strip.background.y = element_blank(),
+#         axis.title.y = element_blank(),
+#         axis.text.y = element_blank(),
+#         axis.ticks.y = element_blank(), 
+#         strip.switch.pad.grid = unit(0, "pt"),
+#         plot.margin = unit(c(2, 4, 4, 0), "pt"),
+#         legend.position = c(0.55, 0.26),
+#         legend.background = element_blank(),
+#         legend.key.height = unit(0.5, "lines"),
+#         legend.key.width = unit(0.6, "lines"),
+#         legend.title = element_blank(),
+#         legend.key = element_blank())
+
+### status - Blim risk
+p_sens_status_risk <- stats_sens_plot %>%
+  filter(sensitivity == "stock_status" & name == "B[lim]~risk" &
            SSB0_rel <= 2) %>%
-  ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist, 
+  ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist,
              linetype = fhist)) +
   stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
-              show.legend = FALSE) + 
+              show.legend = FALSE) +
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
-  geom_blank(data = df_blank, aes(x = x, y = value)) +
-  facet_grid(name ~ "'\ \ \ \ \ \ Initial\nstock status'", scales = "free",
-             labeller = "label_parsed",
-             switch = "y") +
+  facet_wrap(~ "'Initial stock status'", scales = "free",
+              labeller = "label_parsed") +
   scale_linetype_manual("fishing history", values = res_def_linetype) +
   scale_colour_manual("fishing history", values = res_def_colours) +
   scale_fill_manual("fishing history", values = res_def_colours) +
   scale_x_continuous(limits = c(-0.05, 2.05)) +
-  labs(x = expression(SSB[y == 0]/B[MSY])) +
+  labs(x = expression(SSB[y == 0]/B[MSY]),
+       y = expression(B[lim]~risk)) +
+  coord_cartesian(ylim = c(0, 1), xlim = c(0, 2)) +
   theme_bw(base_size = 8) +
-  theme(#strip.placement = "outside",
-        strip.text.y = element_text(size = 8),
-        strip.text.x = element_text(margin = margin(8, 0, 1.2, 0)),
-        strip.background.y = element_blank(),
-        axis.title.y = element_blank(),
-        strip.switch.pad.grid = unit(0, "pt"),
-        plot.margin = unit(c(2, 2, 4, 4), "pt"))
-
-p_sens_period <- stats_sens_plot %>%
-  filter(sensitivity == "period" &
-           stat_metric == "average") %>%
-  ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank())
+### status - catch
+p_sens_status_catch <- stats_sens_plot %>%
+  filter(sensitivity == "stock_status" & name == "Catch/MSY" &
+           SSB0_rel <= 2) %>%
+  ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist,
              linetype = fhist)) +
-  geom_vline(xintercept = 50, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
-  geom_point(size = 0.15, stroke = 0, shape = 21) +
-  geom_blank(data = df_blank, aes(x = x, y = value)) +
-  facet_grid(name ~ "'Implementation\n\ \ \ \ \ \ \ period'", scales = "free", 
-             labeller = "label_parsed",
-             switch = "y") +
+  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
+              show.legend = FALSE) +
+  geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   scale_linetype_manual("fishing history", values = res_def_linetype) +
   scale_colour_manual("fishing history", values = res_def_colours) +
   scale_fill_manual("fishing history", values = res_def_colours) +
-  labs(x = "years") +
+  scale_x_continuous(limits = c(-0.05, 2.05)) +
+  labs(x = expression(SSB[y == 0]/B[MSY]),
+       y = expression("Catch/MSY")) +
+  coord_cartesian(ylim = c(0, 1.4), xlim = c(0, 2)) +
   theme_bw(base_size = 8) +
-  theme(#strip.placement = "outside",
-        strip.text.y = element_blank(),
-        strip.text.x = element_text(margin = margin(8, 0, 0, 0)),
-        strip.background.y = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(), 
-        strip.switch.pad.grid = unit(0, "pt"),
-        plot.margin = unit(c(2, 4, 4, 0), "pt"),
-        legend.position = c(0.55, 0.26),
-        legend.background = element_blank(),
-        legend.key.height = unit(0.5, "lines"),
-        legend.key.width = unit(0.6, "lines"),
-        legend.title = element_blank(),
-        legend.key = element_blank())
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank())
+### status - ssb
+p_sens_status_ssb <- stats_sens_plot %>%
+  filter(sensitivity == "stock_status" & name == "SSB/B[MSY]" &
+           SSB0_rel <= 2) %>%
+  ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist,
+             linetype = fhist)) +
+  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
+              show.legend = FALSE) +
+  geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
+  scale_linetype_manual("fishing history", values = res_def_linetype) +
+  scale_colour_manual("fishing history", values = res_def_colours) +
+  scale_fill_manual("fishing history", values = res_def_colours) +
+  #scale_x_continuous(limits = c(-0.05, 2.05)) +
+  labs(x = expression(SSB[y == 0]/B[MSY]),
+       y = expression(SSB/B[MSY])) +
+  coord_cartesian(ylim = c(0, 4), xlim = c(0, 2)) +
+  theme_bw(base_size = 8) +
+  theme()
 
-p <- p_sens_status + 
-  p_sens_period +
-  plot_layout(nrow = 1)
+### duration - risk
+p_sens_period_risk <- stats_sens_plot %>%
+  filter(sensitivity == "period" & name == "B[lim]~risk" &
+           stat_metric == "average") %>%
+  ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
+             linetype = fhist)) +
+  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
+  geom_point(size = 0.15, stroke = 0, shape = 21) +
+  facet_wrap(~ "'Implementation period'", scales = "free", 
+             labeller = "label_parsed") +
+  scale_linetype_manual("fishing history", values = res_def_linetype) +
+  scale_colour_manual("fishing history", values = res_def_colours) +
+  scale_fill_manual("fishing history", values = res_def_colours) +
+  coord_cartesian(ylim = c(0, 1), xlim = c(0, 100)) +
+  theme_bw(base_size = 8) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(),
+        legend.position = c(0.7, 0.7),
+        legend.key.height = unit(0.5, "lines"),
+        legend.background = element_blank())
+### duration - catch
+p_sens_period_catch <- stats_sens_plot %>%
+  filter(sensitivity == "period" & name == "Catch/MSY" &
+           stat_metric == "average") %>%
+  ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
+             linetype = fhist)) +
+  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
+  geom_point(size = 0.15, stroke = 0, shape = 21) +
+  scale_linetype_manual("fishing history", values = res_def_linetype) +
+  scale_colour_manual("fishing history", values = res_def_colours) +
+  scale_fill_manual("fishing history", values = res_def_colours) +
+  coord_cartesian(ylim = c(0, 1.4), xlim = c(0, 100)) +
+  theme_bw(base_size = 8) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        legend.key.height = unit(0.5, "lines"),
+        legend.background = element_blank())
+### duration - ssb
+p_sens_period_ssb <- stats_sens_plot %>%
+  filter(sensitivity == "period" & name == "SSB/B[MSY]" &
+           stat_metric == "average") %>%
+  ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
+             linetype = fhist)) +
+  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
+  geom_point(size = 0.15, stroke = 0, shape = 21) +
+  scale_linetype_manual("fishing history", values = res_def_linetype) +
+  scale_colour_manual("fishing history", values = res_def_colours) +
+  scale_fill_manual("fishing history", values = res_def_colours) +
+  coord_cartesian(ylim = c(0, 4), xlim = c(0, 100)) +
+  theme_bw(base_size = 8) +
+  labs(x = "Years") + 
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        legend.key.height = unit(0.5, "lines"),
+        legend.background = element_blank())
+
+p <- (p_sens_status_risk + p_sens_period_risk)/
+  (p_sens_status_catch + p_sens_period_catch)/
+  (p_sens_status_ssb + p_sens_period_ssb)
 p
 
-# ggsave(filename = "output/plots/paper/pol_sensitivity_stats.png", 
-#        type = "cairo", plot = p,
-#        width = 17, height = 8, units = "cm", dpi = 600)
-# ggsave(filename = "output/plots/paper/pol_sensitivity_stats.pdf", plot = p,
-#        width = 17, height = 8, units = "cm")
+ggsave(filename = "output/plots/constant_catch/CC_sensitivity.png",
+       type = "cairo", plot = p,
+       width = 17, height = 8, units = "cm", dpi = 600)
+
+### ------------------------------------------------------------------------ ###
+### plot time series ####
+### ------------------------------------------------------------------------ ###
+brp <- brps$pol
+### quantiles
+df_time <- foreach(fhist = c("random", "one-way"),
+                             .combine = rbind) %do% {
+  #browser()
+  file <- "mp_const_catch_3_3_0.8_Inf_0_0.2_0.2_0_0_0.6_0_0.75"
+  res <- readRDS(paste0("output/const_catch/10000_100/baseline/", fhist, 
+                        "/pol/", file, ".rds"))
+  
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@stock, yrs = 101:200)
+  res_corrected$catch[] <- res_corrected$catch/c(refpts(brp)["msy", "yield"])
+  res_corrected$ssb[] <- res_corrected$ssb/c(refpts(brp)["msy", "ssb"])
+  res_corrected$fbar[] <- res_corrected$fbar/c(refpts(brp)["msy", "harvest"])
+  
+  
+  qnts <- lapply(res_corrected, function(x) {
+    quantile(x, c(0.05, 0.25, 0.5, 0.75, 0.95))
+  })
+  qnts <- as(qnts, "FLQuants")
+  df <- as.data.frame(qnts)
+  df$fhist <- fhist
+  return(df)
+}
+### some iterations
+df_time_iters <- foreach(fhist = c("random", "one-way"),
+                   .combine = rbind) %do% {
+  #browser()
+  file <- "mp_const_catch_3_3_0.8_Inf_0_0.2_0.2_0_0_0.6_0_0.75"
+  res <- readRDS(paste0("output/const_catch/10000_100/baseline/", fhist, 
+                        "/pol/", file, ".rds"))
+  
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@stock, yrs = 101:200)
+  res_corrected$catch[] <- res_corrected$catch/c(refpts(brp)["msy", "yield"])
+  res_corrected$ssb[] <- res_corrected$ssb/c(refpts(brp)["msy", "ssb"])
+  res_corrected$fbar[] <- res_corrected$fbar/c(refpts(brp)["msy", "harvest"])
+  qnts <- lapply(res_corrected, function(x) {
+   iter(x, 1:5)
+  })
+  qnts <- as(qnts, "FLQuants")
+  df <- as.data.frame(qnts)
+  df$fhist <- fhist
+  return(df)
+
+}
+
+df_time %>%
+  pivot_wider(names_from = iter, values_from = data) %>%
+  mutate(qname = factor(qname, 
+                        levels = c("ssb", "fbar", "catch"),
+                        labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY")),
+         year = year - 100) %>%
+  ggplot() +
+  geom_ribbon(aes(x = year, ymin = `5%`, ymax = `95%`), alpha = 0.25) + 
+  geom_ribbon(aes(x = year, ymin = `25%`, ymax = `75%`), alpha = 0.5) +
+  geom_line(aes(x = year, y = `50%`), show.legend = FALSE) +
+  geom_line(data = df_time_iters %>%
+              mutate(qname = factor(qname,
+                                    levels = c("ssb", "fbar", "catch"),
+                                    labels = c("SSB/B[MSY]", "F/F[MSY]",
+                                               "Catch/MSY")),
+                     year = year - 100),
+            aes(x = year, y = data, colour = iter),
+            show.legend = FALSE, size = 0.2, alpha = 0.5) +
+  scale_colour_brewer(palette = "Set1") +
+  facet_grid(qname ~ fhist, scales = "free", labeller = "label_parsed", 
+             switch = "y") +
+  labs(x = "Year") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        axis.title.y = element_blank())
+
+ggsave(filename = "output/plots/constant_catch/CC_pol_timeseries.png",
+       type = "cairo", 
+       width = 17, height = 8, units = "cm", dpi = 600)
+
 
 ### ------------------------------------------------------------------------ ###
 ### risk & projection time - all stocks ####
@@ -298,14 +501,13 @@ stats_risk <- foreach(stock = stocks$stock, k = stocks$k,
     df_tmp$k <- k
     return(df_tmp)
 }
-# stats_risk_ <- stats_risk
-# stats_risk <- stats_risk_
+
 stats_risk <- stats_risk %>%
   mutate(metric = factor(metric,
                          levels = c("ssb", "catch", "risk"),
-                         labels = c("SSB/italic(B)[MSY]",
+                         labels = c("SSB/B[MSY]",
                                     "Catch/MSY",
-                                    "Risk")),
+                                    "B[lim]~risk")),
          fhist = factor(fhist,
                         levels = c("one-way", "random")),
          calculation = factor(calculation,
@@ -358,8 +560,42 @@ res_def_colours <- c("one-way" = brewer.pal(n = 4, name = "Set1")[1],
         axis.title.y = element_blank(),
         plot.margin = unit(x = c(1, 3, 0, 3), units = "pt"))
 
+ggsave(filename = "output/plots/constant_catch/CC_all_timeseries.png",
+       type = "cairo", 
+       width = 17, height = 8, units = "cm", dpi = 600)
 
+### annual only
+ggplot() +
+  geom_line(data = stats_risk %>% 
+              filter(source == "stocks" & calculation == "Annual"),
+            aes(x = year - 100, y = data,
+                group = interaction(stock, fhist, source), colour = fhist),
+            linewidth = 0.1, linetype = "dashed") +
+  geom_line(data = stats_risk %>% 
+              filter(source == "median" & calculation == "Annual"),
+            aes(x = year - 100, y = data, 
+                colour = fhist),
+            linewidth = 0.5, linetype = "solid") +
+  facet_wrap(~ metric, labeller = "label_parsed", switch = "y", 
+             scales = "free_y", ncol = 1) +
+  scale_colour_manual("fishing history", values = res_def_colours) +
+  theme_bw(base_size = 8) +
+  coord_cartesian(xlim = c(-2, 102), ylim = c(0, NA), expand = FALSE) +
+  labs(x = "Year") +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 8),
+        legend.key.height = unit(0.5, "lines"),
+        legend.key.width = unit(0.6, "lines"),
+        legend.key = element_blank(),
+        legend.background = element_blank(),
+        legend.position = c(0.9, 0.55),
+        axis.title.y = element_blank(),
+        plot.margin = unit(x = c(1, 3, 0, 3), units = "pt"))
 
-
+ggsave(filename = "output/plots/constant_catch/CC_all_annual_timeseries.png",
+       type = "cairo", 
+       width = 17, height = 8, units = "cm", dpi = 600)
 
 
