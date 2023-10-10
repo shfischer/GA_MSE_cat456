@@ -40,6 +40,14 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     params[c(6, 7, 8)] <- round(params[c(6, 7, 8)], 2)
     ### fix NaN for upper_constraint
     if (is.nan(params[7])) params[7] <- Inf
+  } else if (identical(MP, "CC_f")) {
+    params[1] <- round(params[1], 2) ### Lref_mult
+    params[2] <- round(params[2], 2) ### pa_size
+    params[3] <- round(params[3]) ### interval
+    params[4] <- round(params[4]) ### multiplier
+    params[c(5, 6)] <- round(params[c(5, 6)], 2) ### upper/lower constr
+    ### fix NaN for upper_constraint
+    if (is.nan(params[5])) params[5] <- Inf
   }
   
   ### check for files?
@@ -118,7 +126,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     input <- readRDS(inp_file)
     
     ### insert arguments into input object for mp
-    ### rfb-rule
+    ### rfb rule
     if (identical(MP, "rfb")) {
       input <- lapply(input, function(x) {
         x$ctrl$est@args$idxB_lag     <- params[1]
@@ -161,6 +169,28 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$isys@args$upper_constraint <- params[7]
         x$ctrl$isys@args$lower_constraint <- params[8]
         #x$ctrl$isys@args$cap_below_b <- params[]
+        
+        return(x)
+      })
+    ### constant catch with conditional PA buffer
+    } else if (identical(MP, "CC_f")) {
+      input <- lapply(input, function(x) {
+        
+        ### Lref multiplier
+        x$ctrl$est@args$Lref_mult <- params[1]
+        ### PA buffer size & duration
+        x$ctrl$est@args$pa_size <- params[2]
+        x$ctrl$est@args$pa_duration <- params[3]
+        ### multiplier
+        x$ctrl$est@args$comp_m <- params[4]
+        ### catch interval
+        if (is.numeric(params[3])) {
+          x$ctrl$hcr@args$interval <- params[3]
+          x$ctrl$isys@args$interval <- params[3]
+        }
+        ### catch constraint
+        x$ctrl$isys@args$upper_constraint <- params[5]
+        x$ctrl$isys@args$lower_constraint <- params[6]
         
         return(x)
       })

@@ -32,7 +32,8 @@ input_mp <- function(stocks,
                      idxB_range_3 = 1, ### for b & i
                      catch_lag = 1, catch_range = 1,
                      idxL_lag = 1, idxL_range = 1,
-                     pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
+                     pa_buffer = FALSE, pa_size = 0.8, pa_duration = interval,
+                     Lref_mult = 1,
                      ### phcr
                      exp_r = 1, exp_f = 1, exp_b = 1, ### exponents (rfb only)
                      ### hcr
@@ -394,7 +395,7 @@ input_mp <- function(stocks,
                                   comp_i = FALSE, 
                                   idxB_lag = idxB_lag,
                                   pa_size = pa_size, 
-                                  pa_duration = pa_duration,
+                                  pa_duration = interval,
                                   catch_lag = 0
                       )),
         phcr = mseCtrl(method = phcr_comps,
@@ -423,9 +424,10 @@ input_mp <- function(stocks,
                                   comp_i = FALSE, 
                                   idxB_lag = idxB_lag,
                                   pa_size = pa_size, 
-                                  pa_duration = pa_duration,
+                                  pa_duration = interval,
                                   catch_lag = 0,
-                                  Lref = Lref
+                                  Lref = Lref,
+                                  Lref_mult = Lref_mult
                       )),
         phcr = mseCtrl(method = phcr_comps,
                        args = list()),

@@ -86,7 +86,7 @@ est_comps <- function(stk, idx, tracking, args,
                       idxB_lag = 1, idxB_range_1 = 2, idxB_range_2 = 3,
                       idxB_range_3 = 1,
                       catch_lag = 1, catch_range = 1,
-                      Lref, I_trigger,
+                      Lref, I_trigger, Lref_mult = 1,
                       idxL_lag = 1, idxL_range = 1,
                       pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
                       pa_buffer_conditional = FALSE,
@@ -135,11 +135,11 @@ est_comps <- function(stk, idx, tracking, args,
   if (isTRUE(pa_buffer_conditional)) {
     b_res <- est_pa_conditional(ay = ay, 
                                 tracking = tracking, 
-                                idxB_lag = idxB_lag,
                                 pa_size = pa_size, 
                                 pa_duration = pa_duration,
                                 idx = idx$idxL,
                                 Lref = Lref, idxL_range = idxL_range, 
+                                Lref_mult = Lref_mult,
                                 idxL_lag = idxL_lag)
   }
   tracking["comp_b", ac(ay)] <- b_res
@@ -282,6 +282,7 @@ est_pa <- function(idx, ay, tracking, pa_size, pa_duration, idxB_lag,
 }
 
 est_pa_conditional <- function(Lref, ### reference length (LF=M)
+                               Lref_mult = 1, ### multiplier for Lref
                                idx, ### length index
                                ay, ### current (intermediate) year
                                idxL_range = 1, ### number of years for length
@@ -305,7 +306,7 @@ est_pa_conditional <- function(Lref, ### reference length (LF=M)
   idx_yrs <- seq(to = ay - idxL_range, length.out = idxL_lag)
   idx_mean <- yearMeans(idx[, ac(idx_yrs)])
   ### length relative to reference
-  idx_ratio <- c(idx_mean / Lref)
+  idx_ratio <- c(idx_mean / (Lref * Lref_mult))
   ### avoid negative values
   idx_ratio <- ifelse(idx_ratio > 0, idx_ratio, 0)
   ### avoid NAs, happens if catch = 0

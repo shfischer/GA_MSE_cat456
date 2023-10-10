@@ -1,4 +1,4 @@
-#args <- c("use_MPI=FALSE", "n_workers=0", "n_blocks=1", "popSize=10", "maxiter=5", "run=5", "stock_id=12", "n_iter=500", "n_yrs=50", "fhist='one-way'", "MP='hr'", "ga_search=TRUE", "idxB_lag=FALSE", "idxB_range_3=FALSE", "exp_b=FALSE", "comp_b_multiplier=FALSE", "interval=FALSE", "multiplier=TRUE", "upper_constraint=FALSE", "lower_constraint=FALSE", "obj_SSB=FALSE", "obj_F=FALSE", "obj_C=FALSE", "obj_risk=FALSE", "obj_ICV=FALSE", "obj_ICES_PA=FALSE", "obj_ICES_PA2=FALSE", "obj_ICES_MSYPA=TRUE", "collate=FALSE", "scenario='GA'", "stat_yrs='all'", "add_suggestions=FALSE")
+
 ### ------------------------------------------------------------------------ ###
 ### run MSE ####
 ### ------------------------------------------------------------------------ ###
@@ -325,28 +325,21 @@ if (isFALSE(ga_search)) {
     stop("GA search only possible for one parameter (set)!")
   input <- do.call(input_mp, as.list(hr_params))
 
-  ### ------------------------------------------------------------------------ ###
+  ### ---------------------------------------------------------------------- ###
   ### GA set-up ####
-  ### ------------------------------------------------------------------------ ###
+  ### ---------------------------------------------------------------------- ###
 
   ### GA arguments
-  ga_names <- c("idxB_lag", "idxB_range_3", "exp_b", "comp_b_multiplier",
+  ga_names <- c("Lref_mult", "pa_size",
                 "interval", "multiplier",
                 "upper_constraint", "lower_constraint")
-  ga_default <- c(1, 1, 1, 1.4, 1, 1, Inf, 0)
-  ga_lower <-   c(0, 1, 0, 0,   1, 0, 1,   0)
-  ga_upper <-   c(1, 5, 2, 2,   5, 2, 5,   1)
-  ga_suggestions <- rbind(#c(1, 1, 1, 1.4, 1, 1, Inf, 0), ### default
-                          #c(0, 1, 1, 1.4, 1, 1, Inf, 0), ### more recent data
-                          c(1, 1, 1, 1.4, 1, 0, Inf, 0), ### zero catch
-                          #c(1, 1, 1, 1.4, 2, 1, Inf, 0), ### biennial
-                          #c(0, 1, 1, 1.4, 2, 1, Inf, 0), ### biennial & more recent
-                          #c(1, 1, 1, 0,   1, 1, Inf, 0), ### without b
-                          #c(1, 1, 1, 1.4, 1, 1, 1.2, 0.8), ### +-20% cap
-                          #c(1, 1, 1, 1.4, 1, 1, 1.2, 0.7), ### +20% -30% cap
-                          expand.grid(0:1, 1, 1, c(0, 1, 1.4), 1:2, 1,
-                                      c(1.2, Inf), c(0, 0.8))
-                         )
+  ga_default <- c(1, 0.8, 3, 1, Inf, 0)
+  ga_lower <-   c(0,   0, 1, 0,   0, 0)
+  ga_upper <-   c(2,   1, 5, 2, Inf, 1)
+  ga_suggestions <- rbind(c(1, 0.8, 3, 1, Inf, 0), ### default
+                          c(0, 0.8, 3, 1, Inf, 0), ### zero catch
+                          expand.grid(0:2, c(0.5, 0.7, 0.8, 0.9, 1), 1:5,
+                                      0:2, c(1.2, Inf), c(0, 0.8)))
   ### turn of parameters not requested, i.e. limit to default value
   pos_default <- which(sapply(mget(ga_names, ifnotfound = FALSE), isFALSE))
   ga_lower[pos_default] <- ga_default[pos_default]
@@ -393,7 +386,6 @@ if (isFALSE(ga_search)) {
   scn_pars[which(scn_pars %in% par_fixed)] <- paste0(
     scn_pars[which(scn_pars %in% par_fixed)], val_fixed)
   scn_pars_c <- paste0(scn_pars, collapse = "-")
-  #scenario <- "trial"
   path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/",
                      scenario, "/", fhist, "/",
                      paste0(names(input), collapse = "_"), "/")
