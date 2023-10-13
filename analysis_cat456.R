@@ -598,4 +598,170 @@ ggsave(filename = "output/plots/constant_catch/CC_all_annual_timeseries.png",
        type = "cairo", 
        width = 17, height = 8, units = "cm", dpi = 600)
 
+### ------------------------------------------------------------------------ ###
+### conditional PA buffer - pollack example ####
+### ------------------------------------------------------------------------ ###
+### apply buffer when Lmean <= LF=M
+### every 3 years, 20%
 
+stats_cond <- foreach(rule = c("default", "conditional"), 
+                      .combine = bind_rows) %do% {
+    #browser()
+    if (identical(rule, "default"))
+      res <- readRDS(paste0("output/const_catch/500_100/baseline/one-way/pol/",
+                            "/mp_const_catch_3_3_0.8_Inf_0_0.2_0.2_0_0_",
+                            "0.6_0_0.75.rds"))
+    if (identical(rule, "conditional"))
+      res <- readRDS(paste0("output/const_catch/500_50/CC_f/one-way/pol/",
+                            "mp_CC_f_3_3_0.8_Inf_0_0.2_0.2_0_0_0.6_0_0.75.rds"))
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@stock, yrs = 101:150)
+    
+    ### get fishing history
+    stk <- readRDS(paste0("input/500_50/OM/one-way/pol/stk.rds"))
+    ### combine with results
+    res_corrected <- lapply(res_corrected, window, start = 0)
+    res_corrected$catch[, ac(0:100)] <- catch(stk)[, ac(0:100)]
+    res_corrected$ssb[, ac(0:100)] <- ssb(stk)[, ac(0:100)]
+    res_corrected$fbar[, ac(0:100)] <- fbar(stk)[, ac(0:100)]
+    
+    ### relative metrics
+    res_corrected$catch <- res_corrected$catch/c(refpts(brps$pol)["msy", "yield"])
+    res_corrected$ssb <- res_corrected$ssb/c(refpts(brps$pol)["msy", "ssb"])
+    res_corrected$fbar <- res_corrected$fbar/c(refpts(brps$pol)["msy", "harvest"])
+    
+    ### quantiles
+    res_corrected <- lapply(res_corrected, quantile, 
+                            c(0.05, 0.25, 0.5, 0.75, 0.95))
+    res_corrected <- as(res_corrected, "FLQuants")
+    
+    df <- as.data.frame(res_corrected)
+    df$rule <- rule
+    
+    return(df)
+}
+
+stats_cond <- stats_cond %>%
+  pivot_wider(names_from = iter, values_from = data) %>%
+  mutate(qname = factor(qname, 
+                        levels = c("ssb", "fbar", "catch"),
+                        labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY")),
+         rule = factor(rule, levels = c("default", "conditional"))) %>%
+  select(-age, - unit, -season, -area)
+
+stats_cond %>%
+  mutate(year = year - 100) %>%
+  ggplot(aes(x = year, fill = rule)) +
+  geom_ribbon(aes(ymin = `5%`, ymax = `95%`), alpha = 0.125) + 
+  geom_ribbon(aes(ymin = `25%`, ymax = `75%`), alpha = 0.25) +
+  geom_line(aes(y = `50%`, colour = rule), show.legend = FALSE) +
+  geom_vline(xintercept = 0, colour = "black", linewidth = 0.4) +
+  scale_colour_manual("PA buffer", 
+    values = c("default" = brewer.pal(3, name = "Dark2")[1],
+               "conditional" = brewer.pal(3, name = "Dark2")[2])) +
+  scale_fill_manual("PA buffer", 
+                    values = c("default" = brewer.pal(3, name = "Dark2")[1],
+                               "conditional" = brewer.pal(3, name = "Dark2")[2])) +
+  facet_wrap(~ qname, ncol = 1,
+             scales = "free", labeller = "label_parsed", 
+             switch = "y") +
+  labs(x = "Year") +
+  coord_cartesian(xlim = c(0, 50)) + 
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        axis.title.y = element_blank())
+ggsave(filename = "output/plots/constant_catch/CC_CC_f.png",
+       type = "cairo", 
+       width = 17, height = 8, units = "cm", dpi = 600)
+
+### ------------------------------------------------------------------------ ###
+### conditional PA buffer - pollack example - optimised ####
+### ------------------------------------------------------------------------ ###
+### apply buffer when Lmean <= LF=M
+### every 3 years, 20%
+### + optimised
+
+### get optimised parameters
+ga_res <- readRDS(paste0("output/CC_f/500_50/CC_f_opt/one-way/pol/",
+                         "Lref_mult-pa_size-interval--obj_ICES_MSYPA_res.rds"))
+ga_res@solution
+
+stats_cond <- foreach(rule = c("default", "conditional", "optimised"), 
+                      .combine = bind_rows) %do% {
+  #browser()
+  if (identical(rule, "default"))
+    res <- readRDS(paste0("output/const_catch/500_100/baseline/one-way/pol/",
+                          "/mp_const_catch_3_3_0.8_Inf_0_0.2_0.2_0_0_",
+                          "0.6_0_0.75.rds"))
+  if (identical(rule, "conditional"))
+    res <- readRDS(paste0("output/const_catch/500_50/CC_f/one-way/pol/",
+                          "mp_CC_f_3_3_0.8_Inf_0_0.2_0.2_0_0_0.6_0_0.75.rds"))
+  if (identical(rule, "optimised"))
+    res <- readRDS(paste0("output/CC_f/500_50/CC_f_opt/one-way/pol/",
+                          "mp_1.9_0.49_5_1_Inf_0.rds"))
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@stock, yrs = 101:150)
+  
+  ### get fishing history
+  stk <- readRDS(paste0("input/500_50/OM/one-way/pol/stk.rds"))
+  ### combine with results
+  res_corrected <- lapply(res_corrected, window, start = 0)
+  res_corrected$catch[, ac(0:100)] <- catch(stk)[, ac(0:100)]
+  res_corrected$ssb[, ac(0:100)] <- ssb(stk)[, ac(0:100)]
+  res_corrected$fbar[, ac(0:100)] <- fbar(stk)[, ac(0:100)]
+  
+  ### relative metrics
+  res_corrected$catch <- res_corrected$catch/c(refpts(brps$pol)["msy", "yield"])
+  res_corrected$ssb <- res_corrected$ssb/c(refpts(brps$pol)["msy", "ssb"])
+  res_corrected$fbar <- res_corrected$fbar/c(refpts(brps$pol)["msy", "harvest"])
+  
+  ### quantiles
+  res_corrected <- lapply(res_corrected, quantile, 
+                          c(0.05, 0.25, 0.5, 0.75, 0.95))
+  res_corrected <- as(res_corrected, "FLQuants")
+  
+  df <- as.data.frame(res_corrected)
+  df$rule <- rule
+  
+  return(df)
+}
+
+stats_cond <- stats_cond %>%
+  pivot_wider(names_from = iter, values_from = data) %>%
+  mutate(qname = factor(qname, 
+                        levels = c("ssb", "fbar", "catch"),
+                        labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY")),
+         rule = factor(rule, 
+                       levels = c("default", "conditional", "optimised"))) %>%
+  select(-age, - unit, -season, -area)
+
+stats_cond %>%
+  mutate(year = year - 100) %>%
+  ggplot(aes(x = year, fill = rule)) +
+  geom_ribbon(aes(ymin = `5%`, ymax = `95%`), alpha = 0.125) + 
+  geom_ribbon(aes(ymin = `25%`, ymax = `75%`), alpha = 0.25) +
+  geom_line(aes(y = `50%`, colour = rule), show.legend = FALSE) +
+  geom_vline(xintercept = 0, colour = "black", linewidth = 0.4) +
+  scale_colour_manual("PA buffer", 
+    values = c("default" = brewer.pal(3, name = "Dark2")[1],
+               "conditional" = brewer.pal(3, name = "Dark2")[2],
+               "optimised" = brewer.pal(3, name = "Dark2")[3])) +
+  scale_fill_manual("PA buffer", 
+    values = c("default" = brewer.pal(3, name = "Dark2")[1],
+               "conditional" = brewer.pal(3, name = "Dark2")[2],
+               "optimised" = brewer.pal(3, name = "Dark2")[3])) +
+  facet_wrap(~ qname, ncol = 1,
+             scales = "free", labeller = "label_parsed", 
+             switch = "y") +
+  labs(x = "Year") +
+  coord_cartesian(xlim = c(0, 50)) + 
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        axis.title.y = element_blank())
+ggsave(filename = "output/plots/constant_catch/CC_CC_f_opt.png",
+       type = "cairo", 
+       width = 17, height = 8, units = "cm", dpi = 600)
