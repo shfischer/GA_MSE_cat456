@@ -2,6 +2,7 @@
 ### observations ####
 ### ------------------------------------------------------------------------ ###
 obs_generic <- function(stk, observations, deviances, args, tracking,
+                        idxB = TRUE, ### stock/biomass index?
                         ssb_idx = FALSE, tsb_idx = FALSE, ### use SSB idx
                         idx_timing = FALSE, ### consider survey timing?
                         idx_dev = FALSE,
@@ -11,27 +12,36 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
                         PA_status = FALSE,
                         PA_status_dev = FALSE,
                         PA_Bmsy = FALSE, PA_Fmsy = FALSE,
+                        catch_dev = FALSE,
                         ...) {
 
   #ay <- args$ay
   ### update observations
   observations$stk <- stk
-  ### use SSB as index?
-  if (isTRUE(ssb_idx)) {
-    observations$idx$idxB <- ssb(observations$stk)
-  ### TSB?
-  } else  if (isTRUE(tsb_idx)) {
-      observations$idx$idxB <- tsb(observations$stk)
-  ### otherwise calculate biomass index
-  } else {
-    sn <- stk@stock.n
-    ### reduce by F and M?
-    if (isTRUE(idx_timing)) {
-      sn <- sn * exp(-(harvest(stk) * harvest.spwn(stk) +
-                         m(stk) * m.spwn(stk)))
+  
+  ### biomass index
+  if (isTRUE(idxB)) {
+    ### use SSB as index?
+    if (isTRUE(ssb_idx)) {
+      observations$idx$idxB <- ssb(observations$stk)
+    ### TSB?
+    } else  if (isTRUE(tsb_idx)) {
+        observations$idx$idxB <- tsb(observations$stk)
+    ### otherwise calculate biomass index
+    } else {
+      sn <- stk@stock.n
+      ### reduce by F and M?
+      if (isTRUE(idx_timing)) {
+        sn <- sn * exp(-(harvest(stk) * harvest.spwn(stk) +
+                           m(stk) * m.spwn(stk)))
+      }
+      observations$idx$idxB <- quantSums(sn * stk@stock.wt * 
+                                         observations$idx$sel)
     }
-    observations$idx$idxB <- quantSums(sn * stk@stock.wt * 
-                                       observations$idx$sel)
+  } else {
+    ### insert dummy index
+    observations$idx$idxB <- ssb(stk) %=% NA_real_
+    
   }
   ### use mean length in catch?
   if (isTRUE(lngth)) {
@@ -46,8 +56,15 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   ### observation model
   stk0 <- observations$stk
   idx0 <- observations$idx
+  
+  ### add deviances to catch?
+  if (isTRUE(catch_dev)) {
+    ### add uncertainty to total catch
+    catch(stk0) <- catch(observations$stk) * deviances$stk$catch
+  }
+  
   ### add deviances to index?
-  if (isTRUE(idx_dev)) {
+  if (isTRUE(idxB) & isTRUE(idx_dev)) {
     if (isTRUE(ssb_idx) | isTRUE(tsb_idx)) {
       idx0$idxB <- observations$idx$idxB * deviances$idx$idxB
     } else {
@@ -78,6 +95,95 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
 ### ------------------------------------------------------------------------ ###
 ### estimator ####
 ### ------------------------------------------------------------------------ ###
+
+### category 4-6 - catch and length data
+est_CL <- function(stk, idx, tracking, args,
+                   n_catch = 5, n_length_1 = 5, n_length_2 = n_length_1,
+                   r_catch = TRUE, r_length = TRUE, length_average = TRUE,
+                   lag_catch = 1, lag_length = 1,
+                   interval = 3,
+                   ...) {
+  
+  ay <- args$ay
+  iy <- args$iy
+  
+  ### only run "model" when new advice is required
+  if ((ay - iy) %% interval == 0) {
+  
+    ### catch/advice
+    ### first year - use catch
+    if (identical(ay, iy)) {
+      ### use current year (ay)
+      advice_current <- catch(stk)[, ac(ay)]
+    } else {
+      ### other years - use advice
+      ### use ay-1 because advice for ay is save in ay-1 in tracking object
+      advice_current <- tracking["metric.is", ac(ay - 1)]
+    }
+    
+    ### linear model of (mean standardised) length indicator
+    if (isTRUE(r_length)) {
+      r_length <- apply(idx$idxL[, ac(seq(to = ay - lag_length, 
+                                          length.out = n_length_1))], 
+                        6, function(x) {
+        tmp_data <- as.data.frame(FLQuant(x))
+        tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
+        out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
+                   silent = TRUE)
+        if (is(out, "try-error")) {
+          return(0) ### return 0, i.e. no trend detected
+        } else {
+          return(out)
+        }
+      })
+    } else {
+      r_length <- 0
+    }
+    
+    ### linear model of (mean standardised) catch
+    if (isTRUE(r_catch)) {
+      r_catch <- apply(catch(stk)[, ac(seq(to = ay - lag_catch, 
+                                           length.out = n_catch))], 
+                       6, function(x) {
+        tmp_data <- as.data.frame(FLQuant(x))
+        tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
+        out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
+                   silent = TRUE)
+        if (is(out, "try-error")) {
+          return(0) ### return 0, i.e. no trend detected
+        } else {
+          return(out)
+        }
+      })
+    } else {
+      r_catch <- 0
+    }
+    
+    ### average length
+    if (isTRUE(length_average)) {
+      length_average <- apply(idx$idxL[, ac(seq(to = ay - lag_length, 
+                                                length.out = n_length_2))],
+                              6, mean, na.rm = TRUE)
+    } else {
+      length_average <- NA
+    }
+  
+  } else {
+    
+    ### dummy values when no new advice calculated
+    r_length <- r_catch <- length_average <- advice_current <- NA
+    
+  }
+  
+  ### save results
+  tracking["r_length", ac(ay)] <- r_length
+  tracking["r_catch", ac(ay)] <- r_catch
+  tracking["length_average", ac(ay)] <- length_average
+  tracking["A_last", ac(ay)] <- advice_current
+  
+  return(list(stk = stk, tracking = tracking))
+  
+}
 
 est_comps <- function(stk, idx, tracking, args,
                       comp_r = FALSE, comp_f = FALSE, comp_b = FALSE,
@@ -383,6 +489,49 @@ est_A <- function(catch, ay, iy,
 ### ------------------------------------------------------------------------ ###
 ### parametrization of HCR
 
+phcr_CL <- function(tracking, args,
+                    multiplier = 1,
+                    lambda_upper = 0.1, lambda_lower = 0.2,
+                    gamma_lower = 0.2, gamma_upper = 0.1,
+                    r_threshold = 0.05, l_threshold = 0.1,
+                    Lref = NA, Lref_mult = 1,
+                    ...) {
+  
+  ay <- args$ay
+  
+  ### get values from tracking
+  hcrpars <- tracking[c("A_last",
+                        "r_length", "r_catch", "length_average",
+                        "A_last", "A_last", "A_last", "A_last", ### dummy values
+                        "A_last", "A_last", "A_last", "A_last",
+                        "A_last"), ac(ay)]
+  dimnames(hcrpars)$metric[5:13] <- c("lambda_upper", "lambda_lower",
+                                      "gamma_upper", "gamma_lower",
+                                      "r_threshold", "l_threshold",
+                                      "Lref", "Lref_mult", "multiplier")
+
+  ### insert control rule parameters
+  hcrpars["lambda_upper", ] <- lambda_upper
+  hcrpars["lambda_lower", ] <- lambda_lower
+  hcrpars["gamma_upper", ] <- gamma_upper
+  hcrpars["gamma_lower", ] <- gamma_lower
+  hcrpars["r_threshold", ] <- r_threshold
+  hcrpars["l_threshold", ] <- l_threshold
+  hcrpars["Lref", ] <- Lref
+  hcrpars["Lref_mult", ] <- Lref_mult
+  hcrpars["multiplier", ] <- multiplier
+  
+  ### if threshold is zero, add tiny number to avoid computational issues
+  if (identical(r_threshold, 0)) 
+    hcrpars["r_threshold", ] <- r_threshold + .Machine$double.eps
+  if (identical(l_threshold, 0)) 
+    hcrpars["l_threshold", ] <- l_threshold + .Machine$double.eps
+
+  return(list(tracking = tracking, hcrpars = hcrpars))
+  
+}
+
+
 phcr_comps <- function(tracking, args, 
                        exp_r = 1, exp_f = 1, exp_b = 1,
                        ...){
@@ -409,6 +558,101 @@ phcr_comps <- function(tracking, args,
 ### hcr ####
 ### ------------------------------------------------------------------------ ###
 ### apply catch rule
+
+hcr_CL <- function(hcrpars, args, tracking, interval = 2, 
+                   combine_alpha_beta = FALSE,
+                   ...) {
+  
+  ay <- args$ay ### current year
+  iy <- args$iy ### first simulation year
+  
+  ### check if new advice requested
+  if ((ay - iy) %% interval == 0) {
+    
+    ### alpha - trends from catch and length data
+    
+    ### split into groups:
+    ### -1: value < -0.01
+    ###  0: -0.01 < value < 0.01
+    ### +1: value > 0.01
+    r_length <- cut(c(hcrpars["r_length"]), 
+                    breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])), 
+                               unique(c(hcrpars["r_threshold"])), Inf), 
+                    labels = c(-1, 0, 1))
+    if (any(is.na(r_length))) r_length[is.na(r_length)] <- 0
+    r_length <- as.numeric(as.character(r_length))
+    r_catch <- cut(c(hcrpars["r_catch"]), 
+                   breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])),
+                              unique(c(hcrpars["r_threshold"])), Inf), 
+                   labels = c(-1, 0, 1))
+    r_catch <- as.numeric(as.character(r_catch))
+    if (any(is.na(r_catch))) r_catch[is.na(r_catch)] <- 0
+    
+    ### status: combine catch and length trend
+    r_status <- r_length + r_catch
+    
+    ### assign values:
+    ### -2: 1 - 2*lambda_lower
+    ### -1: 1 - 1*lambda_lower
+    ###  0: 1
+    ###  1: 1 + 1*lambda_upper
+    ###  2: 1 + 2*lambda_upper
+    alpha <- sapply(as.character(r_status), function(x) {
+      switch(x,
+             "-2" = 1 - 2*(c(hcrpars["lambda_lower"])[1]),
+             "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
+             "0" = 1,
+             "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
+             "2" = 1 + 2*(c(hcrpars["lambda_upper"])[1])
+      )
+    })
+    
+    ### beta - status evaluation from average catch length
+    ### (relative to reference length)
+    length_status <- cut(c(hcrpars["length_average"]/
+                             (hcrpars["Lref"]*hcrpars["Lref_mult"])), 
+                         breaks = c(-Inf, 1 - unique(c(hcrpars["l_threshold"])), 
+                                    1 + unique(c(hcrpars["l_threshold"])), Inf), 
+                         labels = c("negative", "neutral", "positive"))
+    
+    if (any(is.na(length_status))) 
+      length_status[is.na(length_status)] <- "neutral"
+    ### assign values:
+    ### -2: 1 - 2*lambda_lower
+    ### -1: 1 - 1*lambda_lower
+    ###  0: 1
+    ###  1: 1 + 1*lambda_upper
+    ###  2: 1 + 2*lambda_upper
+    beta <- sapply(as.character(length_status), function(x) {
+      switch(x,
+             "negative" = 1 - 1*(c(hcrpars["gamma_lower"])[1]),
+             "neutral" = 1,
+             "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
+      )
+    })
+    
+    ### calculate advice
+
+    if (!isTRUE(combine_alpha_beta)) {
+      ### only apply alpha if beta != 1  
+      alpha[which(beta != 1)] <- 1
+    }
+    advice <- hcrpars["A_last"] * alpha * beta * hcrpars["multiplier"]
+    
+  } else {
+    
+    ### use last year's advice
+    advice <- tracking["metric.hcr", ac(ay - 1)]
+    
+  }
+  
+  ctrl <- getCtrl(values = c(advice), quantity = "catch", years = ay + 1, 
+                  it = dim(advice)[6])
+  
+  return(list(ctrl = ctrl, tracking = tracking))
+  
+}
+
 
 hcr_comps <- function(hcrpars, args, tracking, interval = 2, 
                   ...) {

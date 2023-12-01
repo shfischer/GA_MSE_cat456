@@ -17,6 +17,10 @@ input_mp <- function(stocks,
                      sigmaL = 0.2,
                      sigmaB_rho = 0,
                      sigmaL_rho = 0,
+                     ### catch observation uncertainty
+                     sigmaC = 0,
+                     ### Catch implementation uncertainty
+                     sigmaIEM = 0,
                      ### recruitment variability
                      sigmaR = 0.6,
                      sigmaR_rho = 0,
@@ -25,7 +29,7 @@ input_mp <- function(stocks,
                      ### HR definition
                      hr_value = "length",
                      ### est
-                     multiplier = 1,
+                     multiplier = 1, ### also for CL
                      comp_b_multiplier = 1.4,
                      idxB_lag = 1,
                      idxB_range_1 = 2, idxB_range_2 = 3, ### 2 over 3 ratio
@@ -33,7 +37,7 @@ input_mp <- function(stocks,
                      catch_lag = 1, catch_range = 1,
                      idxL_lag = 1, idxL_range = 1,
                      pa_buffer = FALSE, pa_size = 0.8, pa_duration = interval,
-                     Lref_mult = 1,
+                     Lref_mult = 1, ### also for CL
                      ### phcr
                      exp_r = 1, exp_f = 1, exp_b = 1, ### exponents (rfb only)
                      ### hcr
@@ -41,9 +45,16 @@ input_mp <- function(stocks,
                      ### is
                      upper_constraint = 1.2, ### uncertainty cap
                      lower_constraint = 0.7, 
-                     cap_below_b = FALSE ### conditional cap?
-                     ### iem
-                     
+                     cap_below_b = FALSE, ### conditional cap?
+                     ### MP: CL
+                     lambda_upper = 0.1, 
+                     lambda_lower = 0.2,
+                     gamma_lower = 0.2, 
+                     gamma_upper = 0.2,
+                     r_threshold = 0.05, 
+                     l_threshold = 0.1,
+                     #Lref_mult = 1,
+                     ...
                      ) {
   
   ### load life-history parameters
@@ -53,7 +64,7 @@ input_mp <- function(stocks,
   ### stock ID
   if (is.numeric(stocks)) stocks <- stocks_lh$stock[stocks]
   
-  ### go through list of stocks
+  ### go through list of stocks ####
   input_list <- lapply(stocks, function(stock) {  
     
     lhist <- stocks_lh[stocks_lh$stock == stock, ]
@@ -67,7 +78,7 @@ input_mp <- function(stocks,
     sr <- readRDS(paste0("input/", n_iter, "_", n_yrs, "/OM/", fhist, "/",
                           stock, "/sr.rds"))
     
-    ### adapt recruitment variability if needed
+    ### adapt recruitment variability if needed #####
     if (isTRUE(!identical(sigmaR, 0.6) | !identical(sigmaR_rho, 0))) {
       ### create recruitment residuals for projection period
       set.seed(0)
@@ -81,14 +92,13 @@ input_mp <- function(stocks,
       set.seed(0)
       residuals(sr)[, ac(1:100)] <- rlnoise(n_iter, (rec(stk) %=% 0)[, ac(1:100)], 
                                             sd = sigmaR, b = sigmaR_rho)
-      
     }
     
     ### cut off history
     stk <- window(stk, start = hist_yr_min)
     sr@residuals <- window(sr@residuals, start = hist_yr_min)
     
-    ### adapt recruitment steepness if needed
+    ### adapt recruitment steepness if needed #####
     if (!identical(steepness, 0.75)) {
       ### calculate new recruitment model parameters with new steepness
       alpha <- (4*steepness*c(refpts["virgin", "rec"])) /
@@ -99,28 +109,36 @@ input_mp <- function(stocks,
       params(sr)[] <- c(alpha, beta)
     }
     
-    ### operating model
+    ### operating model ####
     om <- FLom(stock = stk, ### stock 
                sr = sr, ### stock recruitment and precompiled residuals
                fleetBehaviour = mseCtrl(),
                projection = mseCtrl(method = fwd_attr,
                                     args = list(dupl_trgt = TRUE)))
   
-    
-    ### length data
-    if (MP %in% c("rfb", "hr", "CC_f")) {
+    ### length data ####
+    if (MP %in% c("rfb", "hr", "CC_f", "CL")) {
+      ### allometric a & b
+      ### length at first capture
       pars_l <- FLPar(a = lhist$a,
                       b = lhist$b,
                       Lc = calc_lc(stk = stk[, ac(75:100)], 
                                    a = lhist$a, b = lhist$b))
+      ### mean catch length
+      idx_Lmean <- lmean(stk = stk, params = pars_l)
+      
+      ### calculate reference length FL=M
+      Lref <- c(0.75 * pars_l["Lc"] + 0.25 * lhist$linf)
     }
     
-    ### observation (error) model
+    ### index template ####
     idx <- FLQuants(
       sel = stk@mat %=% NA_real_,
       idxB = ssb(stk) %=% NA_real_,
       idxL = ssb(stk) %=% NA_real_,
       PA_status = ssb(stk) %=% NA_integer_)
+    
+    ### observation (error) model ####
     if (identical(MP, "hr")) {
       oem <- FLoem(method = obs_generic,
                    observations = list(stk = stk, idx = idx), 
@@ -137,7 +155,6 @@ input_mp <- function(stocks,
                    deviances = list(stk = FLQuant(), idx = idx),
                    args = list(idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
                                lngth = FALSE, lngth_dev = FALSE,
-                               #lngth_par = FLPar(),
                                PA_status = TRUE, PA_status_dev = FALSE,
                                PA_Bmsy = Inf, ### i.e. B always below Bmsy/2
                                PA_Fmsy = 0 ### i.e. F always above Fmsy
@@ -155,161 +172,164 @@ input_mp <- function(stocks,
                                  PA_Fmsy = 0 ### i.e. F always above Fmsy
                                  ### -> always apply buffer
                      ))
-      
+    ### Catch + length data
+    } else if (identical(MP, "CL")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idxB = FALSE,
+                               lngth = TRUE, lngth_dev = TRUE,
+                               lngth_par = pars_l
+                   ))
     }
-    ### create biomass index
-    ### update index if not total stock biomass
-    if (identical(idx_sel, "ssb")) {
-      oem@args$ssb_idx <- TRUE
-      oem@args$tsb_idx <- FALSE
-      oem@args$idx_timing <- TRUE
-      oem@observations$idx$sel <- mat(stk)
-    } else if (identical(idx_sel, "tsb")) {
-      oem@args$ssb_idx <- FALSE
-      oem@args$tsb_idx <- TRUE
-      oem@args$idx_timing <- TRUE
-      oem@observations$idx$sel <- mat(stk) %=% 1
-    } else if (identical(idx_sel, "catch")) {
-      oem@args$ssb_idx <- FALSE
-      oem@args$tsb_idx <- FALSE
-      oem@args$idx_timing <- TRUE
-      ### estimate selectivity of catch (i.e. catch numbers/stock numbers)
-      cn <- oem@observations$stk@catch.n
-      sn <- oem@observations$stk@stock.n
-      csel <- cn/sn
-      csel_max <- csel
-      for (age in seq(dim(csel)[1]))
-        csel_max[age, ] <- csel[dim(csel)[1], ]
-      csel <- csel/csel_max
-      ### standardise for all years
-      csel <- yearMeans(csel)
-      oem@observations$idx$sel[] <- csel
-    }  else if (identical(idx_sel, "dome_shaped")) {
-      oem@args$ssb_idx <- FALSE
-      oem@args$tsb_idx <- FALSE
-      oem@args$idx_timing <- TRUE
-      ### get life-history parameters
-      if (is.na(lhist$t0)) lhist$t0 <- -0.1
-      if (is.na(lhist$a50))
-        lhist$a50 <- -log(1 - lhist$l50/lhist$linf)/lhist$k + lhist$t0
-      ages <- as.numeric(dimnames(stk)$age)
-      ### define selectivity (follow FLife's double normal function)
-      sel_dn <- function(t, t1, sl, sr) {
-        ifelse(t < t1, 2^(-((t - t1)/sl)^2), 2^(-((t - t1)/sr)^2))
+    
+    ### create biomass index - if needed ####
+    if (MP %in% c("rfb", "hr")) {
+      ### update index if not total stock biomass
+      if (identical(idx_sel, "ssb")) {
+        oem@args$ssb_idx <- TRUE
+        oem@args$tsb_idx <- FALSE
+        oem@args$idx_timing <- TRUE
+        oem@observations$idx$sel <- mat(stk)
+      } else if (identical(idx_sel, "tsb")) {
+        oem@args$ssb_idx <- FALSE
+        oem@args$tsb_idx <- TRUE
+        oem@args$idx_timing <- TRUE
+        oem@observations$idx$sel <- mat(stk) %=% 1
+      } else if (identical(idx_sel, "catch")) {
+        oem@args$ssb_idx <- FALSE
+        oem@args$tsb_idx <- FALSE
+        oem@args$idx_timing <- TRUE
+        ### estimate selectivity of catch (i.e. catch numbers/stock numbers)
+        cn <- oem@observations$stk@catch.n
+        sn <- oem@observations$stk@stock.n
+        csel <- cn/sn
+        csel_max <- csel
+        for (age in seq(dim(csel)[1]))
+          csel_max[age, ] <- csel[dim(csel)[1], ]
+        csel <- csel/csel_max
+        ### standardise for all years
+        csel <- yearMeans(csel)
+        oem@observations$idx$sel[] <- csel
+      }  else if (identical(idx_sel, "dome_shaped")) {
+        oem@args$ssb_idx <- FALSE
+        oem@args$tsb_idx <- FALSE
+        oem@args$idx_timing <- TRUE
+        ### get life-history parameters
+        if (is.na(lhist$t0)) lhist$t0 <- -0.1
+        if (is.na(lhist$a50))
+          lhist$a50 <- -log(1 - lhist$l50/lhist$linf)/lhist$k + lhist$t0
+        ages <- as.numeric(dimnames(stk)$age)
+        ### define selectivity (follow FLife's double normal function)
+        sel_dn <- function(t, t1, sl, sr) {
+          ifelse(t < t1, 2^(-((t - t1)/sl)^2), 2^(-((t - t1)/sr)^2))
+        }
+        sel <- sel_dn(t = ages, t1 = lhist$a50, sl = 1, sr = 10)
+        oem@observations$idx$sel[] <- sel
+      } else {
+        ### standard scientific survey
+        oem@args$ssb_idx <- FALSE
+        oem@args$tsb_idx <- FALSE
+        oem@args$idx_timing <- TRUE
+        sel <- 1/(1 + exp(-1*(an(dimnames(stk)$age) - dims(stk)$max/10)))
+        oem@observations$idx$sel[] <- sel
       }
-      sel <- sel_dn(t = ages, t1 = lhist$a50, sl = 1, sr = 10)
-      oem@observations$idx$sel[] <- sel
-    } else {
-      ### standard scientific survey
-      oem@args$ssb_idx <- FALSE
-      oem@args$tsb_idx <- FALSE
-      oem@args$idx_timing <- TRUE
-      sel <- 1/(1 + exp(-1*(an(dimnames(stk)$age) - dims(stk)$max/10)))
-      oem@observations$idx$sel[] <- sel
-    }
-    
-    ### calculate biomass index with selectivity
-    ### get stock numbers and reduce by F and M
-    sn <- stock.n(stk) * exp(-(harvest(stk) * harvest.spwn(stk) + 
-                                 m(stk) * m.spwn(stk)))
-    ### calculate index
-    idxB <- quantSums(sn * stock.wt(stk) * oem@observations$idx$sel)
-    oem@observations$idx$idxB <- idxB
-    
-    
       
+      ### calculate biomass index with selectivity
+      ### get stock numbers and reduce by F and M
+      sn <- stock.n(stk) * exp(-(harvest(stk) * harvest.spwn(stk) + 
+                                   m(stk) * m.spwn(stk)))
+      ### calculate index
+      idxB <- quantSums(sn * stock.wt(stk) * oem@observations$idx$sel)
+      oem@observations$idx$idxB <- idxB
+    } 
+
     ### length index
     ### only include when required for MP
-    if (isTRUE(MP %in% c("rfb", "CC_f"))) {
+    if (isTRUE(MP %in% c("CC_f", "CL"))) {
       oem@args$lngth <- TRUE
       oem@args$lngth_dev <- TRUE
       oem@args$lngth_par <- pars_l
       ### calculate mean length
-      oem@observations$idx$idxL <- lmean(stk = stk, params = pars_l)
+      oem@observations$idx$idxL <- idx_Lmean
     }
   
-    ### index deviations
-    ### PA buffer deviations (based on SPiCT performance)
-    if (isTRUE(MP %in% c("2over3"))) {
+    ### index deviations ####
+    
+    ### PA buffer deviations ####
+    if (isTRUE(MP %in% c("const_catch", "CC_f"))) {
       PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
                                                    year = dimnames(stk)$year, 
                                                    iter = dimnames(stk)$iter))
-      set.seed(1)
-      PA_status_dev["positive"] <- rbinom(n = PA_status_dev["positive"], 
-                                          size = 1, prob = 0.9886215)
-      set.seed(2)
-      PA_status_dev["negative"] <- rbinom(n = PA_status_dev["negative"], 
-                                          size = 1, prob = 1 - 0.4216946)
-      oem@deviances$idx$PA_status <- PA_status_dev
-    } else if (isTRUE(MP %in% c("const_catch"))) {
-      PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
-                                                   year = dimnames(stk)$year, 
-                                                   iter = dimnames(stk)$iter))
+      ### always apply PA buffer
       set.seed(1)
       PA_status_dev["positive"] <- 1
       set.seed(2)
       PA_status_dev["negative"] <- 1
       oem@deviances$idx$PA_status <- PA_status_dev
-    } else if (identical(MP, "CC_f")) {
-      PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
-                                                   year = dimnames(stk)$year, 
-                                                   iter = dimnames(stk)$iter))
-      set.seed(1)
-      PA_status_dev["positive"] <- 1
-      set.seed(2)
-      PA_status_dev["negative"] <- 1
-      oem@deviances$idx$PA_status <- PA_status_dev
-      
-      set.seed(696)
-      oem@deviances$idx$idxL <- rlnoise(n = dims(idx$idxL)$iter, idx$idxL %=% 0, 
-                                        sd = 0.2, b = 0)
-        
-    }
+    } 
     
     oem@deviances$idx$sel <- oem@deviances$idx$sel %=% 1
     
-    ### biomass index deviations
+    ### biomass index deviations ####
     set.seed(695)
-    if (isTRUE(MP %in% c("rfb", "2over3", "hr"))) {
+    if (isTRUE(MP %in% c("hr"))) {
       oem@deviances$idx$idxB <- rlnoise(n = dims(idx$idxB)$iter, idx$idxB %=% 0, 
                                         sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("rfb", "hr"))) {
+    if (isTRUE(MP %in% c("hr", "CL"))) {
       oem@deviances$idx$idxL <- rlnoise(n = dims(idx$idxL)$iter, idx$idxL %=% 0, 
                                         sd = sigmaL, b = sigmaL_rho)
     }
     ### replicate previous deviates from GA paper
     set.seed(696)
-    if (isTRUE(MP %in% c("rfb", "2over3", "hr"))) {
+    if (isTRUE(MP %in% c("hr"))) {
       oem@deviances$idx$idxB[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxB)$iter,
                 window(oem@deviances$idx$idxB, end = 150) %=% 0,
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("rfb", "hr"))) {
+    if (isTRUE(MP %in% c("hr", "CL"))) {
       oem@deviances$idx$idxL[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxL)$iter, 
                 window(oem@deviances$idx$idxB, end = 150) %=% 0,
                 sd = sigmaL, b = sigmaL_rho)
     }
     
-    ### biomass index reference points
-    ### lowest observed index in last 50 years
-    I_loss <- apply(window(oem@observations$idx$idxB * 
-                             oem@deviances$idx$idxB, end = 100),
-                    6, min)
-    I_trigger <- I_loss * comp_b_multiplier
+    if (MP %in% c("hr", "CC_f")) {
+      ### biomass index reference points
+      ### lowest observed index in last 50 years
+      I_loss <- apply(window(oem@observations$idx$idxB * 
+                               oem@deviances$idx$idxB, end = 100),
+                      6, min)
+      I_trigger <- I_loss * comp_b_multiplier
+    } else {
+      I_loss <- I_trigger <- NA
+    }
+    
+    ### catch deviation ####
+    if (MP %in% c("CL")) {
+      ### deviation on total catch
+      set.seed(699)
+      oem@deviances$stk <- FLQuants(
+        catch = rlnoise(n = dims(stk)$iter, catch(stk) %=% 0, 
+                        sd = sigmaC, b = 0))
+      oem@args$catch_dev <- TRUE
+    }
   
-    ### iem deviation
+    ### Implementation error model (IEM) ####
     set.seed(205)
     iem_dev <- FLQuant(rlnoise(n = dims(stk)$iter,  catch(stk) %=% 0,
-                               sd = 0.1, b = 0))
+                               sd = sigmaIEM, b = 0))
     ### iem object
     iem <- FLiem(method = iem_comps,
-                 args = list(use_dev = FALSE, iem_dev = iem_dev))
+                 args = list(use_dev = ifelse(isTRUE(sigmaIEM > 0),
+                                              TRUE, FALSE), 
+                             iem_dev = iem_dev))
     
+    ### MP control object ####
     
-    ### harvest rate (chr)
+    ### harvest rate (chr) ####
     if (identical(MP, "hr")) {
       ### load some reference harvest rates 
       hr_refs <- readRDS("input/catch_rates.rds")[stock]
@@ -381,7 +401,7 @@ input_mp <- function(stocks,
       ))
     
     } else if (identical(MP, "const_catch")) {
- 
+      ### const_catch ####
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
@@ -407,9 +427,7 @@ input_mp <- function(stocks,
       ))
       
     } else if (identical(MP, "CC_f")) {
-      
-      ### calculate reference length FL=M
-      Lref <- c(0.75 * pars_l["Lc"] + 0.25 * lhist$linf)
+      ### CC_f ####
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
@@ -437,14 +455,40 @@ input_mp <- function(stocks,
                        args = list(interval = interval))
       ))
       
+    } else if (identical(MP, "CL")) {
+      ### CL ####
+      ### set up MP ctrl object
+      ctrl <- ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_CL,
+                      args = list(interval = interval)),
+        phcr = mseCtrl(method = phcr_CL,
+                       args = list(interval = interval,
+                                   lambda_upper = lambda_upper,
+                                   lambda_lower = lambda_lower,
+                                   gamma_lower = gamma_lower, 
+                                   gamma_upper = gamma_upper,
+                                   r_threshold = r_threshold, 
+                                   l_threshold = l_threshold,
+                                   Lref = Lref,
+                                   Lref_mult = Lref_mult,
+                                   multiplier = multiplier)),
+        hcr = mseCtrl(method = hcr_CL,
+                      args = list(interval = interval)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval))
+      ))
+      
     }
     
-    ### tracking
+    ### tracking ####
     if (isTRUE(MP %in% c("rfb", "hr", "2over3", "const_catch", "CC_f"))) {
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
-      
-      
+    } else if (isTRUE(MP %in% c("CL"))) {
+      tracking <- c("r_length", "r_catch", "length_average",
+                    "r_threshold", "l_threshold",
+                    "lambda_upper", "lambda_lower", 
+                    "A_last")
     }
     
     ### args
@@ -457,7 +501,7 @@ input_mp <- function(stocks,
                  seed_part = FALSE
     )
     
-    ### list with input object for mp()
+    ### list with input object for mp() ####
     input <- list(om = om, oem = oem, iem = iem, ctrl = ctrl, 
                   args = args,
                   scenario = scenario, 

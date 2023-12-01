@@ -33,35 +33,51 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
   if (!exists("fhist")) fhist <- "one-way"
   
   ### MP parameters
-  if (!exists("MP")) MP <- "const_catch"
-  if (!exists("multiplier")) multiplier <- 1
-  if (!exists("comp_r")) comp_r <- FALSE
-  if (!exists("comp_f")) comp_f <- FALSE
-  if (!exists("comp_b")) comp_b <- FALSE
-  if (!exists("pa_buffer")) pa_buffer <- TRUE
-  if (!exists("pa_size")) pa_size <- 0.8
-  if (!exists("pa_duration")) pa_duration <- 3
-  if (!exists("interval")) interval <- 3
-  if (!exists("idxB_lag")) idxB_lag <- 1
-  if (!exists("upper_constraint")) upper_constraint <- Inf
-  if (!exists("lower_constraint")) lower_constraint <- 0
+  if (!exists("MP")) MP <- "CL"
+  ### MP - constant catch
+  if (identical(MP, "constant_catch")) {
+    if (!exists("multiplier")) multiplier <- 1
+    if (!exists("comp_r")) comp_r <- FALSE
+    if (!exists("comp_f")) comp_f <- FALSE
+    if (!exists("comp_b")) comp_b <- FALSE
+    if (!exists("pa_buffer")) pa_buffer <- TRUE
+    if (!exists("pa_size")) pa_size <- 0.8
+    if (!exists("pa_duration")) pa_duration <- 3
+    if (!exists("interval")) interval <- 3
+    if (!exists("idxB_lag")) idxB_lag <- 1
+    if (!exists("upper_constraint")) upper_constraint <- Inf
+    if (!exists("lower_constraint")) lower_constraint <- 0
+  }
+  ### MP - CC_f
+  
+  ### MP - CL
+  if (identical(MP, "CL")) {
+    if (!exists("interval")) interval <- 3
+    if (!exists("lambda_upper")) lambda_upper <- 0.1
+    if (!exists("lambda_lower")) lambda_lower <- 0.2
+    if (!exists("gamma_lower")) gamma_lower <- 0.2
+    if (!exists("gamma_upper")) gamma_upper <- 0.1
+    if (!exists("r_threshold")) r_threshold <- 0.05
+    if (!exists("l_threshold")) l_threshold <- 0.1
+    if (!exists("Lref_mult")) Lref_mult <- 1
+    if (!exists("multiplier")) multiplier <- 1
+  }
   
   if (!exists("stat_yrs")) stat_yrs <- "all"
   if (!exists("scenario")) scenario <- "baseline"
   
+  ### OM specifications
   ### observation uncertainty
-  if (!exists("sigmaL")) sigmaL <- 0.2
-  if (!exists("sigmaB")) sigmaB <- 0.2
-  ### observation uncertainty auto-correlation
+  if (!exists("sigmaL")) sigmaL <- 0.1
   if (!exists("sigmaL_rho")) sigmaL_rho <- 0
-  if (!exists("sigmaB_rho")) sigmaB_rho <- 0
+  if (!exists("sigmaC")) sigmaC <- 0.1
+  ### implementation error
+  if (!exists("sigmaIEM")) sigmaIEM <- 0.1
   ### recruitment variability
   if (!exists("sigmaR")) sigmaR <- 0.6
   if (!exists("sigmaR_rho")) sigmaR_rho <- 0.0
   ### recruitment steepness
   if (!exists("steepness")) steepness <- 0.75
-  ### index selectivity
-  if (!exists("idx_sel")) idx_sel <- "tsb"
   
   ### what to save
   if (!exists("check_file")) check_file <- TRUE
@@ -184,34 +200,21 @@ if (isTRUE(use_MPI)) {
 ### ------------------------------------------------------------------------ ###
 
 ### HR rule parameters & uncertainty
-hr_params <- data.frame(stock = stock_id, 
-                        fhist = fhist, 
-                        n_iter = n_iter, 
-                        n_yrs = n_yrs, 
-                        MP = MP, 
-                        scenario = scenario,
-                        idx_sel = idx_sel,
-                        n_blocks = n_blocks,
-                        sigmaB = sigmaB,
-                        sigmaL = sigmaL,
-                        sigmaB_rho = sigmaB_rho,
-                        sigmaL_rho = sigmaL_rho,
-                        sigmaR = sigmaR,
-                        sigmaR_rho = sigmaR_rho,
-                        steepness = steepness,
-                        #hr_value = hr_value,
-                        multiplier = multiplier,
-                        #comp_b_multiplier = comp_b_multiplier,
-                        idxB_lag = idxB_lag,
-                        #idxB_range_3 = idxB_range_3,
-                        interval = interval, 
-                        pa_buffer = pa_buffer, 
-                        pa_size = pa_size, 
-                        pa_duration = pa_duration,
-                        upper_constraint = upper_constraint,
-                        lower_constraint = lower_constraint, 
-                        #cap_below_b = cap_below_b,
-                        stringsAsFactors = FALSE)
+if (isFALSE(exists("stock_id"))) stop("'stock_id' is missing!")
+hr_params <- c(
+  ### OM
+  "stock_id", "fhist", "n_iter", "n_yrs", "MP", "scenario", "n_blocks",
+  ### uncertainty
+  "sigmaL", "sigmaL_rho", "sigmaC", "sigmaR", "sigmaR_rho", "steepness",
+  "sigmaIEM",
+  ### MP parameters
+  "multiplier", "interval", "pa_buffer", "pa_size", "pa_duration",
+  "upper_constraint", "lower_constraint",
+  "lambda_upper", "lambda_lower", "gamma_lower", "gamma_upper", "r_threshold",
+  "l_threshold", "Lref_mult"
+)
+hr_params <- as.data.frame(mget(hr_params, ifnotfound = NA))
+names(hr_params)[1] <- "stocks"
 
 ### ------------------------------------------------------------------------ ###
 ### manual runs ####
@@ -242,14 +245,14 @@ if (isFALSE(ga_search)) {
     ### paths ####
     ### -------------------------------------------------------------------- ###
     ### generate file name
-    file_pars <- c(MP, par_i$interval, par_i$pa_duration, par_i$pa_size, 
-                   par_i$upper_constraint, par_i$lower_constraint,
-                   par_i$sigmaL, par_i$sigmaB, 
-                   par_i$sigmaL_rho, par_i$sigmaB_rho, 
-                   par_i$sigmaR, par_i$sigmaR_rho, par_i$steepness)
-    file_pars <- file_pars[!is.na(file_pars)]
-    file_out <- paste0(file_pars, collapse = "_")
-    path_out <- paste0("output/const_catch/", n_iter, "_", n_yrs, "/", scenario, "/",
+    pars_OM <- c(par_i$sigmaL, par_i$sigmaL_rho, par_i$sigmaC, par_i$sigmaR, 
+                 par_i$sigmaR_rho, par_i$steepness, par_i$sigmaIEM)
+    if (identical(MP, "CL")) 
+      pars_MP <- c(par_i$interval, par_i$lambda_upper, par_i$lambda_lower, 
+                   par_i$gamma_lower, par_i$gamma_upper, par_i$r_threshold, 
+                   par_i$l_threshold, par_i$Lref_mult)
+    file_out <- paste0(c(pars_OM, "", pars_MP), collapse = "_")
+    path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/", scenario, "/",
                        fhist, "/", paste0(names(input_i), collapse = "_"), "/")
     dir.create(path_out, recursive = TRUE)
     ### skip if run already exists
@@ -328,18 +331,77 @@ if (isFALSE(ga_search)) {
   ### ---------------------------------------------------------------------- ###
   ### GA set-up ####
   ### ---------------------------------------------------------------------- ###
-
+  
   ### GA arguments
-  ga_names <- c("Lref_mult", "pa_size",
-                "interval", "multiplier",
-                "upper_constraint", "lower_constraint")
-  ga_default <- c(1, 0.8, 3, 1, Inf, 0)
-  ga_lower <-   c(0,   0, 1, 0,   0, 0)
-  ga_upper <-   c(2,   1, 5, 2, Inf, 1)
-  ga_suggestions <- rbind(c(1, 0.8, 3, 1, Inf, 0), ### default
-                          c(0, 0.8, 3, 1, Inf, 0), ### zero catch
-                          expand.grid(0:2, c(0.5, 0.7, 0.8, 0.9, 1), 1:5,
-                                      0:2, c(1.2, Inf), c(0, 0.8)))
+  ### MP: CC_f
+  if (identical(MP, "CC_f")) {
+    ga_names <- c("Lref_mult", "pa_size",
+                  "interval", "multiplier",
+                  "upper_constraint", "lower_constraint")
+    ga_default <- c(1, 0.8, 3, 1, Inf, 0)
+    ga_lower <-   c(0,   0, 1, 0,   0, 0)
+    ga_upper <-   c(2,   1, 5, 2, Inf, 1)
+    ga_suggestions <- rbind(c(1, 0.8, 3, 1, Inf, 0), ### default
+                            c(0, 0.8, 3, 1, Inf, 0), ### zero catch
+                            expand.grid(0:2, c(0.5, 0.7, 0.8, 0.9, 1), 1:5,
+                                        0:2, c(1.2, Inf), c(0, 0.8)))
+  } else if (identical(MP, "CL")) {
+    ga_names <- c("interval",     ### 0 decimal digits; 1-5
+                  "lambda_lower", ### 2 decimal digits; 0.00-0.50
+                  "lambda_upper", ### 2 decimal digits; 0.00-0.50
+                  "gamma_lower",  ### 2 decimal digits; 0.00-0.50
+                  "gamma_upper",  ### 2 decimal digits; 0.00-0.50
+                  "r_threshold",  ### 2 decimal digits; 0.00-0.50
+                  "l_threshold",  ### 2 decimal digits; 0.00-0.50
+                  "Lref_mult",    ### 2 decimal digits; 0.00-2.00
+                  "multiplier"    ### 2 decimal digits; 0.00-2.00
+                  )
+    ga_default <- c(3,  0.2,  0.1,  0.2,  0.1, 0.05,  0.1, 1, 1) ### default values
+    ga_lower <-   c(1,    0,    0,    0,    0,    0,    0, 0, 0) ### minima
+    ga_upper <-   c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 2, 2) ### maxima
+    ### ga() samples uniform real (double) values from lower ga_lower to 
+    ### ga_upper and these are then rounded to the significant digits
+    ### -> adjust ga_lower/upper so that minima/maxima have same probability
+    ga_step  <-   c(1, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
+    ga_lower <- ga_lower - (ga_step/2 - .Machine$double.eps)
+    ga_upper <- ga_upper + (ga_step/2 - .Machine$double.eps)
+    ### add some suggested parameterisations
+    ga_suggestions <- rbind(### default
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            ### zero catch
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0), 
+                            ### interval
+                            c(1, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(4, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(5, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            ### lambda/gamma
+                            c(3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.3, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.05, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.2, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.3, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.05, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.3, 0.05, 0.1, 1, 1), 
+                            ### thresholds
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.01, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.10, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.20, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.05, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.2, 1, 1), 
+                            ### multipliers
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.8, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.9, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.2, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.8), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.9), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.2)
+                            )
+  }
+  
   ### turn of parameters not requested, i.e. limit to default value
   pos_default <- which(sapply(mget(ga_names, ifnotfound = FALSE), isFALSE))
   ga_lower[pos_default] <- ga_default[pos_default]
@@ -357,6 +419,9 @@ if (isFALSE(ga_search)) {
                                      each = nrow(ga_suggestions))
   ga_suggestions <- unique(ga_suggestions)
   names(ga_suggestions) <- ga_names
+  
+  
+  
 
   ### multiplier only: run all possible values
   if (isTRUE(multiplier) &
@@ -408,9 +473,9 @@ if (isFALSE(ga_search)) {
   rm(input)
   gc()
 
-  ### ------------------------------------------------------------------------ ###
+  ### ---------------------------------------------------------------------- ###
   ### check if previous solutions can be used as suggestions ####
-  ### ------------------------------------------------------------------------ ###
+  ### ---------------------------------------------------------------------- ###
 
   ### years for summary statistics
   file_ext <- ifelse(stat_yrs == "all", "_res",

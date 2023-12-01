@@ -48,6 +48,13 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     params[c(5, 6)] <- round(params[c(5, 6)], 2) ### upper/lower constr
     ### fix NaN for upper_constraint
     if (is.nan(params[5])) params[5] <- Inf
+  } else if (identical(MP, "CL")) {
+    params[1] <- round(params[1], 0) ### interval
+    params[c(2, 3)] <- round(params[c(2, 3)], 2) ### lambda lower/upper
+    params[c(4, 5)] <- round(params[c(4, 5)], 2) ### lambda lower/upper
+    params[c(6, 7)] <- round(params[c(6, 7)], 2) ### r/l treshold
+    params[8] <- round(params[8], 2) ### Lref_mult
+    params[9] <- round(params[9], 2) ### multiplier
   }
   
   ### check for files?
@@ -141,14 +148,11 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$isys@args$interval <- params[8]
         x$ctrl$isys@args$upper_constraint <- params[10]
         x$ctrl$isys@args$lower_constraint <- params[11]
-        
         return(x)
       })
     ### harvest rates
     } else if (identical(MP, "hr")) {
       input <- lapply(input, function(x) {
-        
-        
         ### biomass index 
         x$ctrl$est@args$idxB_lag <- params[1]
         x$ctrl$est@args$idxB_range_3 <- params[2]
@@ -169,7 +173,6 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$isys@args$upper_constraint <- params[7]
         x$ctrl$isys@args$lower_constraint <- params[8]
         #x$ctrl$isys@args$cap_below_b <- params[]
-        
         return(x)
       })
     ### constant catch with conditional PA buffer
@@ -191,7 +194,28 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         ### catch constraint
         x$ctrl$isys@args$upper_constraint <- params[5]
         x$ctrl$isys@args$lower_constraint <- params[6]
-        
+        return(x)
+      })
+    } else if (identical(MP, "CL")) {
+      input <- lapply(input, function(x) {
+        ### interval
+        x$ctrl$est@args$interval <- params[1]
+        x$ctrl$phcr@args$interval <- params[1]
+        x$ctrl$hcr@args$interval <- params[1]
+        x$ctrl$isys@args$interval <- params[1]
+        ### lambda
+        x$ctrl$phcr@args$lambda_lower <- params[2]
+        x$ctrl$phcr@args$lambda_upper <- params[3]
+        ### gamma
+        x$ctrl$phcr@args$gamma_lower <- params[4]
+        x$ctrl$phcr@args$gamma_upper <- params[5]
+        ### r/l thresholds
+        x$ctrl$phcr@args$r_threshold <- params[6]
+        x$ctrl$phcr@args$l_threshold <- params[7]
+        ### Lref_mult
+        x$ctrl$phcr@args$Lref_mult <- params[8]
+        ### multiplier
+        x$ctrl$phcr@args$multiplier <- params[9]
         return(x)
       })
     }
