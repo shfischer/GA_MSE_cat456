@@ -501,6 +501,19 @@ mp_postFitness <- function(x, path, check_file, MP, summarise_runs = FALSE,
       if (any(is.nan(pop$upper_constraint))) {
         pop$upper_constraint[is.nan(pop$upper_constraint)] <- Inf
       }
+    } else if (identical(MP, "CL")) {
+      colnames(pop) <- c("interval", "lambda_lower", "lambda_upper", 
+                         "gamma_lower", "gamma_upper", "r_threshold",
+                         "l_threshold", "Lref_mult", "multiplier")
+      pop$interval <- round(pop$interval, 0) ### interval
+      pop$lambda_lower <- round(pop$lambda_lower, 2) ### lambda lower/upper
+      pop$lambda_upper <- round(pop$lambda_upper, 2) ### lambda lower/upper
+      pop$gamma_lower <- round(pop$gamma_lower, 2) ### gamma lower/upper
+      pop$gamma_upper <- round(pop$gamma_upper, 2) ### gamma lower/upper
+      pop$r_threshold <- round(pop$r_threshold, 2) ### r_threshold
+      pop$l_threshold <- round(pop$l_threshold, 2) ### l_threshold
+      pop$Lref_mult <- round(pop$Lref_mult, 2) ### Lref_mult
+      pop$multiplier <- round(pop$multiplier, 2) ### multiplier
     }
     ### file names
     pop$name <- apply(pop, 1, paste0, collapse = "_")
