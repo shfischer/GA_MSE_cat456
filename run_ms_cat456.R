@@ -123,7 +123,8 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
 ### use mse fork from shfischer/mse, branch mseDL2.0 
 ### remotes::install_github("shfischer/mse", ref = "mseDL2.0)
 req_pckgs <- c("mse", "tidyr", "dplyr", "doParallel", "GA", "doRNG")
-for (i in req_pckgs) library(package = i, character.only = TRUE)
+for (i in req_pckgs) 
+  suppressPackageStartupMessages(library(package = i, character.only = TRUE))
 
 ### load additional functions
 source("funs.R")
@@ -149,9 +150,10 @@ if (isTRUE(use_MPI)) {
   ### 2nd: doParallel workers inside doMPI workers
   . <- foreach(i = seq(cl_length_1)) %dopar% {
     ### load packages and functions into MPI workers
-    for (i in req_pckgs) library(package = i, character.only = TRUE,
-                                 warn.conflicts = FALSE, verbose = FALSE,
-                                 quietly = TRUE)
+    for (i in req_pckgs) 
+      suppressPackageStartupMessages(library(package = i, character.only = TRUE,
+                                             warn.conflicts = FALSE, 
+                                             verbose = FALSE, quietly = TRUE))
   }
   message("MPI package loading succeeded")
   . <- foreach(i = seq(cl_length_1)) %dopar% {
@@ -167,9 +169,12 @@ if (isTRUE(use_MPI)) {
       cl_length_2 <- length(cl2)
       ### load packages and functions into parallel workers
       . <- foreach(i = seq(cl_length_2)) %dopar% {
-        for (i in req_pckgs) library(package = i, character.only = TRUE,
-                                     warn.conflicts = FALSE, verbose = FALSE,
-                                     quietly = TRUE)
+        for (i in req_pckgs) 
+          suppressPackageStartupMessages(library(package = i, 
+                                                 character.only = TRUE,
+                                                 warn.conflicts = FALSE, 
+                                                 verbose = FALSE, 
+                                                 quietly = TRUE))
         source("funs.R", echo = FALSE)
         source("funs_GA.R", echo = FALSE)
       }
@@ -184,9 +189,11 @@ if (isTRUE(use_MPI)) {
     cl_length_1 <- length(cl1)
     ### load packages and functions into parallel workers
     . <- foreach(i = seq(cl_length_1)) %dopar% {
-      for (i in req_pckgs) library(package = i, character.only = TRUE,
-                                   warn.conflicts = FALSE, verbose = FALSE,
-                                   quietly = TRUE)
+      for (i in req_pckgs) 
+        suppressPackageStartupMessages(library(package = i, 
+                                               character.only = TRUE,
+                                               warn.conflicts = FALSE, 
+                                               verbose = FALSE, quietly = TRUE))
       source("funs.R", echo = FALSE)
       source("funs_GA.R", echo = FALSE)
     }
