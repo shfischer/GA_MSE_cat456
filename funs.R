@@ -23,10 +23,10 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   if (isTRUE(idxB)) {
     ### use SSB as index?
     if (isTRUE(ssb_idx)) {
-      observations$idx$idxB <- ssb(observations$stk)
+      index(observations$idx$idxB) <- ssb(observations$stk)
     ### TSB?
     } else  if (isTRUE(tsb_idx)) {
-        observations$idx$idxB <- tsb(observations$stk)
+      index(observations$idx$idxB) <- tsb(observations$stk)
     ### otherwise calculate biomass index
     } else {
       sn <- stk@stock.n
@@ -35,22 +35,22 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
         sn <- sn * exp(-(harvest(stk) * harvest.spwn(stk) +
                            m(stk) * m.spwn(stk)))
       }
-      observations$idx$idxB <- quantSums(sn * stk@stock.wt * 
-                                         observations$idx$sel)
+      index(observations$idx$idxB) <- quantSums(sn * stk@stock.wt * 
+                                        index(observations$idx$sel))
     }
   } else {
     ### insert dummy index
-    observations$idx$idxB <- ssb(stk) %=% NA_real_
+    index(observations$idx$idxB) <- ssb(stk) %=% NA_real_
     
   }
   ### use mean length in catch?
   if (isTRUE(lngth)) {
-    observations$idx$idxL <- lmean(stk = stk, params = lngth_par)
+    index(observations$idx$idxL) <- lmean(stk = stk, params = lngth_par)
   }
   ### stock status for PA buffer?
   if (isTRUE(PA_status)) {
-    observations$idx$PA_status[] <- ssb(observations$stk) > 0.5*PA_Bmsy & 
-                                    fbar(observations$stk) < PA_Fmsy
+    index(observations$idx$PA_status)[] <- 
+      ssb(observations$stk) > 0.5*PA_Bmsy & fbar(observations$stk) < PA_Fmsy
   }
   
   ### observation model
@@ -66,26 +66,25 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   ### add deviances to index?
   if (isTRUE(idxB) & isTRUE(idx_dev)) {
     if (isTRUE(ssb_idx) | isTRUE(tsb_idx)) {
-      idx0$idxB <- observations$idx$idxB * deviances$idx$idxB
+      index(idx0$idxB) <- index(observations$idx$idxB) * index(deviances$idx$idxB)
     } else {
-      idx0$idxB <- quantSums(stk@stock.n * stk@stock.wt * 
-                             observations$idx$sel * deviances$idx$sel)
+      index(idx0$idxB) <- quantSums(stk@stock.n * stk@stock.wt * 
+                            index(observations$idx$sel) * index(deviances$idx$sel))
       if (isTRUE("idxB" %in% names(deviances$idx)) & 
-          all.equal(dim(deviances$idx$idxB), dim(idx0$idxB)))
-        idx0$idxB <- idx0$idxB * deviances$idx$idxB
+          all.equal(dim(index(deviances$idx$idxB)), dim(index(idx0$idxB))))
+        index(idx0$idxB) <- index(idx0$idxB) * index(deviances$idx$idxB)
     }
   }
   ### uncertainty for catch length
   if (isTRUE(lngth) & isTRUE(lngth_dev)) {
-    idx0$idxL <- observations$idx$idxL * deviances$idx$idxL
+    index(idx0$idxL) <- index(observations$idx$idxL) * index(deviances$idx$idxL)
   }
   ### uncertainty for stock status for PA buffer
   if (isTRUE(PA_status) & isTRUE(PA_status_dev)) {
-    idx0$PA_status <- ifelse(observations$idx$PA_status == TRUE, 
-                             deviances$idx$PA_status["positive", ],
-                             deviances$idx$PA_status["negative", ])
+    index(idx0$PA_status) <- ifelse(index(observations$idx$PA_status) == TRUE, 
+                                index(deviances$idx$PA_status)["positive", ],
+                                index(deviances$idx$PA_status)["negative", ])
   }
-  
   
   return(list(stk = stk0, idx = idx0, observations = observations,
               tracking = tracking))
@@ -117,13 +116,12 @@ est_CL <- function(stk, idx, tracking, args,
       advice_current <- catch(stk)[, ac(ay)]
     } else {
       ### other years - use advice
-      ### use ay-1 because advice for ay is save in ay-1 in tracking object
-      advice_current <- tracking["metric.is", ac(ay - 1)]
+      advice_current <- tracking[[1]]["isys", ac(ay)]
     }
     
     ### linear model of (mean standardised) length indicator
     if (isTRUE(r_length)) {
-      r_length <- apply(idx$idxL[, ac(seq(to = ay - lag_length, 
+      r_length <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
                                           length.out = n_length_1))], 
                         6, function(x) {
         tmp_data <- as.data.frame(FLQuant(x))
@@ -161,7 +159,7 @@ est_CL <- function(stk, idx, tracking, args,
     
     ### average length
     if (isTRUE(length_average)) {
-      length_average <- apply(idx$idxL[, ac(seq(to = ay - lag_length, 
+      length_average <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
                                                 length.out = n_length_2))],
                               6, mean, na.rm = TRUE)
     } else {
@@ -176,10 +174,10 @@ est_CL <- function(stk, idx, tracking, args,
   }
   
   ### save results
-  tracking["r_length", ac(ay)] <- r_length
-  tracking["r_catch", ac(ay)] <- r_catch
-  tracking["length_average", ac(ay)] <- length_average
-  tracking["A_last", ac(ay)] <- advice_current
+  tracking[[1]]["r_length", ac(ay)] <- r_length
+  tracking[[1]]["r_catch", ac(ay)] <- r_catch
+  tracking[[1]]["length_average", ac(ay)] <- length_average
+  tracking[[1]]["A_last", ac(ay)] <- advice_current
   
   return(list(stk = stk, tracking = tracking))
   
@@ -204,26 +202,26 @@ est_comps <- function(stk, idx, tracking, args,
   
   ### component r: index trend
   if (isTRUE(comp_r)) {
-    r_res <- est_r(idx = idx$idxB, ay = ay,
+    r_res <- est_r(idx = index(idx$idxB), ay = ay,
                    idxB_lag = idxB_lag, idxB_range_1 = idxB_range_1, 
                    idxB_range_2 = idxB_range_2)
   } else {
     r_res <- 1
   }
-  tracking["comp_r", ac(ay)] <- r_res
+  tracking[[1]]["comp_r", ac(ay)] <- r_res
   
   ### component f: length data
   if (isTRUE(comp_f)) {
-    f_res <- est_f(idx = idx$idxL, ay = ay,
+    f_res <- est_f(idx = index(idx$idxL), ay = ay,
                    Lref = Lref, idxL_range = idxL_range, idxL_lag = idxL_lag)
   } else {
     f_res <- 1
   }
-  tracking["comp_f", ac(ay)] <- f_res
+  tracking[[1]]["comp_f", ac(ay)] <- f_res
   
   ### component b: biomass safeguard
   if (isTRUE(comp_b)) {
-    b_res <- est_b(idx = idx$idxB, ay = ay,
+    b_res <- est_b(idx = index(idx$idxB), ay = ay,
                    I_trigger = I_trigger, idxB_lag = idxB_lag, 
                    idxB_range_3 = idxB_range_3)
   } else {
@@ -232,7 +230,7 @@ est_comps <- function(stk, idx, tracking, args,
   
   ### PA buffer
   if (isTRUE(pa_buffer)) {
-    b_res <- est_pa(idx = idx$PA_status, ay = ay, 
+    b_res <- est_pa(idx = index(idx$PA_status), ay = ay, 
                     tracking = tracking, idxB_lag = idxB_lag,
                     pa_size = pa_size, pa_duration = pa_duration)
   }
@@ -243,21 +241,21 @@ est_comps <- function(stk, idx, tracking, args,
                                 tracking = tracking, 
                                 pa_size = pa_size, 
                                 pa_duration = pa_duration,
-                                idx = idx$idxL,
+                                idx = index(idx$idxL),
                                 Lref = Lref, idxL_range = idxL_range, 
                                 Lref_mult = Lref_mult,
                                 idxL_lag = idxL_lag)
   }
-  tracking["comp_b", ac(ay)] <- b_res
+  tracking[[1]]["comp_b", ac(ay)] <- b_res
   
   ### component i: index value
   if (isTRUE(comp_i)) {
-    i_res <- est_i(idx = idx$idxB, ay = ay,
+    i_res <- est_i(idx = index(idx$idxB), ay = ay,
                    idxB_lag = idxB_lag, idxB_range_3 = idxB_range_3)
   } else {
     i_res <- 1
   }
-  tracking["comp_i", ac(ay)] <- i_res
+  tracking[[1]]["comp_i", ac(ay)] <- i_res
   
   ### current catch/advice
   if (isTRUE(comp_c)) {
@@ -269,7 +267,7 @@ est_comps <- function(stk, idx, tracking, args,
   } else {
     c_res <- 1
   }
-  tracking["comp_c", ac(ay)] <- c_res
+  tracking[[1]]["comp_c", ac(ay)] <- c_res
   
   ### component m: multiplier
   if (!isFALSE(comp_m)) {
@@ -281,7 +279,7 @@ est_comps <- function(stk, idx, tracking, args,
   } else {
     m_res <- 1
   }
-  tracking["multiplier", ac(ay)] <- m_res
+  tracking[[1]]["multiplier", ac(ay)] <- m_res
   
   ### component hr: harvest rate (catch/idx)
   if (!isFALSE(comp_hr)) {
@@ -293,7 +291,7 @@ est_comps <- function(stk, idx, tracking, args,
   } else {
     hr_res <- 1
   }
-  tracking["comp_hr", ac(ay)] <- hr_res
+  tracking[[1]]["comp_hr", ac(ay)] <- hr_res
   
   return(list(stk = stk, tracking = tracking))
   
@@ -370,7 +368,7 @@ est_pa <- function(idx, ay, tracking, pa_size, pa_duration, idxB_lag,
                    ...) {
   
   ### find last year in which buffer was applied
-  last <- apply(tracking["comp_b",,, drop = FALSE], 6, FUN = function(x) {#browser()
+  last <- apply(tracking[[1]]["comp_b",,, drop = FALSE], 6, FUN = function(x) {#browser()
     ### positions (years) where buffer was applied
     yr <- dimnames(x)$year[which(x < 1)]
     ### return -Inf if buffer was never applied
@@ -421,7 +419,7 @@ est_pa_conditional <- function(Lref, ### reference length (LF=M)
   ### buffer
   
   ### find last year in which buffer was applied
-  last <- apply(tracking["comp_b",,, drop = FALSE], 6, FUN = function(x) {#browser()
+  last <- apply(tracking[[1]]["comp_b",,, drop = FALSE], 6, FUN = function(x) {#browser()
     ### positions (years) where buffer was applied
     yr <- dimnames(x)$year[which(x < 1)]
     ### return -Inf if buffer was never applied
@@ -435,7 +433,7 @@ est_pa_conditional <- function(Lref, ### reference length (LF=M)
   pos_apply <- intersect(pos_check, pos_negative)
   
   ### initialise buffer value
-  res <- rep(1, dim(tracking)[6])
+  res <- rep(1, dim(tracking[[1]])[6])
   res[pos_apply] <- pa_size
   
   return(res)
@@ -476,8 +474,9 @@ est_A <- function(catch, ay, iy,
     catch_current <- yearMeans(catch[, ac(catch_yrs)])
   ### other years - use advice
   } else {
-    ### yrs - 1 because advice for ay+1 is saved in ay in tracking object
-    catch_current <- yearMeans(tracking["metric.is", ac(catch_yrs - 1)])
+    ### use catch_yrs + 1 because advice value is stored in corresponding
+    ### years in tracking object
+    catch_current <- yearMeans(tracking[[1]]["isys", ac(catch_yrs + 1)])
   }
   
   return(catch_current)
@@ -500,7 +499,7 @@ phcr_CL <- function(tracking, args,
   ay <- args$ay
   
   ### get values from tracking
-  hcrpars <- tracking[c("A_last",
+  hcrpars <- tracking[[1]][c("A_last",
                         "r_length", "r_catch", "length_average",
                         "A_last", "A_last", "A_last", "A_last", ### dummy values
                         "A_last", "A_last", "A_last", "A_last",
@@ -526,6 +525,9 @@ phcr_CL <- function(tracking, args,
     hcrpars["r_threshold", ] <- r_threshold + .Machine$double.eps
   if (identical(l_threshold, 0)) 
     hcrpars["l_threshold", ] <- l_threshold + .Machine$double.eps
+  
+  ### convert hcrpars into FLPar to make "goFish" happy...
+  hcrpars <- FLPar(hcrpars)
 
   return(list(tracking = tracking, hcrpars = hcrpars))
   
@@ -538,16 +540,19 @@ phcr_comps <- function(tracking, args,
   
   ay <- args$ay
   
-  hcrpars <- tracking[c("comp_r", "comp_f", "comp_b", "comp_i", 
+  hcrpars <- tracking[[1]][c("comp_r", "comp_f", "comp_b", "comp_i", 
                         "comp_hr", "comp_c", "multiplier",
                         "exp_r", "exp_f", "exp_b"), ac(ay)]
   hcrpars["exp_r", ] <- exp_r
   hcrpars["exp_f", ] <- exp_f
   hcrpars["exp_b", ] <- exp_b
   
-  if (exp_r != 1) tracking["exp_r", ] <- exp_r
-  if (exp_f != 1) tracking["exp_f", ] <- exp_f
-  if (exp_b != 1) tracking["exp_b", ] <- exp_b
+  if (exp_r != 1) tracking[[1]]["exp_r", ] <- exp_r
+  if (exp_f != 1) tracking[[1]]["exp_f", ] <- exp_f
+  if (exp_b != 1) tracking[[1]]["exp_b", ] <- exp_b
+  
+  ### convert hcrpars into FLPar to make "goFish" happy...
+  hcrpars <- FLPar(hcrpars)
   
   ### return results
   return(list(tracking = tracking, hcrpars = hcrpars))
@@ -641,13 +646,14 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     
   } else {
     
-    ### use last year's advice
-    advice <- tracking["metric.hcr", ac(ay - 1)]
+    ### use last year's advice (saved in ay)
+    advice <- tracking[[1]]["hcr", ac(ay)]
     
   }
   
-  ctrl <- getCtrl(values = c(advice), quantity = "catch", years = ay + 1, 
-                  it = dim(advice)[6])
+  ctrl <- fwdControl(FLQuant(c(advice), dimnames = list(year = ay + 1,
+                                                        iter = seq(args$it))), 
+                     quant = "catch")
   
   return(list(ctrl = ctrl, tracking = tracking))
   
@@ -668,20 +674,22 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
                 (hcrpars["comp_r", ]^hcrpars["exp_r", ]) *
                 (hcrpars["comp_f", ]^hcrpars["exp_f", ]) *
                 (hcrpars["comp_b", ]^hcrpars["exp_b", ]) *
-                 hcrpars["comp_i"] *
-                 hcrpars["comp_hr"] *
+                 hcrpars["comp_i", ] *
+                 hcrpars["comp_hr", ] *
                  hcrpars["multiplier", ] 
     #advice <- apply(X = hcrpars, MARGIN = 6, prod, na.rm = TRUE)
     
   } else {
     
-    ### use last year's advice
-    advice <- tracking["metric.hcr", ac(ay - 1)]
+    ### use last year's advice (saved in ay)
+    advice <- tracking[[1]]["hcr", ac(ay)]
+    
     
   }
 
-  ctrl <- getCtrl(values = c(advice), quantity = "catch", years = ay + 1, 
-                  it = dim(advice)[6])
+  ctrl <- fwdControl(FLQuant(c(advice), dimnames = list(year = ay + 1,
+                                                        iter = seq(args$it))), 
+                     quant = "catch")
   
   return(list(ctrl = ctrl, tracking = tracking))
   
@@ -700,7 +708,7 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
   
-  advice <- ctrl@trgtArray[ac(ay + args$management_lag), "val", ]
+  advice <- as.vector(ctrl@iters[, "value", ])
   
   ### check if new advice requested
   if ((ay - iy) %% interval == 0) {
@@ -711,9 +719,9 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
       ### get last advice
       if (isTRUE(ay == iy)) {
         ### use OM value in first year of projection
-        adv_last <- tracking["C.om", ac(iy)]
+        adv_last <- tracking[[1]]["C.om", ac(iy - 1)]
       } else {
-        adv_last <- tracking["metric.is", ac(ay - 1)]
+        adv_last <- tracking[[1]]["isys", ac(ay)]
       }
       ### ratio of new advice/last advice
       adv_ratio <- advice/adv_last
@@ -725,7 +733,7 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
         ### turn of constraint when index below Itrigger?
         if (isFALSE(cap_below_b)) {
           pos_upper <- setdiff(pos_upper, 
-                               which(c(tracking[, ac(ay)]["comp_b", ]) < 1))
+                               which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
         }
         ### limit advice
         if (length(pos_upper) > 0) {
@@ -739,7 +747,7 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
         ### turn of constraint when index below Itrigger?
         if (isFALSE(cap_below_b)) {
           pos_lower <- setdiff(pos_lower, 
-                               which(c(tracking[, ac(ay)]["comp_b", ]) < 1))
+                               which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
         }
         ### limit advice
         if (length(pos_lower) > 0) {
@@ -751,10 +759,12 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
   ### otherwise do nothing here and recycle last year's advice
   } else {
     
-    advice <- tracking["metric.is", ac(ay - 1)]
+    advice <- tracking[[1]]["isys", ac(ay)]
     
   }
-  ctrl@trgtArray[ac(ay + args$management_lag),"val",] <- advice
+  
+  ### update advice values in control object
+  ctrl@iters[, "value", ] <- advice
   
   return(list(ctrl = ctrl, tracking = tracking))
   
@@ -773,13 +783,13 @@ iem_comps <- function(ctrl, args, tracking,
   if (isTRUE(use_dev)) {
     
     ### get advice
-    advice <- ctrl@trgtArray[ac(ay + args$management_lag), "val", ]
+    advice <- ctrl@iters[, "value", ]
     ### get deviation
     dev <- c(iem_dev[, ac(ay)])
     ### implement deviation
     advice <- advice * dev
     ### insert into ctrl object
-    ctrl@trgtArray[ac(ay + args$management_lag),"val",] <- advice
+    ctrl@iters[, "value", ] <- advice
     
   }
   
@@ -790,61 +800,18 @@ iem_comps <- function(ctrl, args, tracking,
 ### ------------------------------------------------------------------------ ###
 ### projection ####
 ### ------------------------------------------------------------------------ ###
-fwd_attr <- function(stk, ctrl,
-                     sr, ### stock recruitment model
-                     sr.residuals, ### recruitment residuals
-                     sr.residuals.mult = TRUE, ### are res multiplicative?
+fwd_attr <- function(om, ### includes stock, recruitment model
+                     deviances, 
+                     ctrl,
                      maxF = 5, ### maximum allowed Fbar
-                     dupl_trgt = FALSE,
                      ...) {
   
-  ### avoid the issue that the catch is higher than the targeted catch
-  ### can happen due to bug in FLash if >1 iteration provided
-  ### sometimes, FLash struggles to get estimates and then uses F estimate from
-  ### previous iteration
-  ### workaround: target same value several times and force FLash to try again
-  if (isTRUE(dupl_trgt)) {
-
-    ### duplicate target
-    ctrl@target <- rbind(ctrl@target, ctrl@target, ctrl@target)
-    ### replace catch in second row with landings
-    ctrl@target$quantity[1] <- "landings"
-    ctrl@target$quantity[3] <- "catch"
-
-    ### extract target values
-    val_temp <- ctrl@trgtArray[, "val", ]
-
-    ### extend trgtArray
-    ### extract dim and dimnames
-    dim_temp <- dim(ctrl@trgtArray)
-    dimnames_temp <- dimnames(ctrl@trgtArray)
-    ### duplicate years
-    dim_temp[["year"]] <- dim_temp[["year"]] * 3
-    dimnames_temp$year <- rep(dimnames_temp$year, 3)
-
-    ### create new empty array
-    trgtArray <- array(data = NA, dim = dim_temp, dimnames = dimnames_temp)
-
-    ### fill with values
-    ### first as target
-    trgtArray[1, "val", ] <- val_temp
-    ### then again, but as max
-    trgtArray[2, "max", ] <- val_temp
-    ### min F
-    trgtArray[3, "max", ] <- val_temp
-
-    ### insert into ctrl object
-    ctrl@trgtArray <- trgtArray
-  }
-  
-  ### project forward with FLash::fwd
-  stk[] <- fwd(object = stk, control = ctrl, sr = sr, 
-               sr.residuals = sr.residuals, 
-               sr.residuals.mult = sr.residuals.mult,
-               maxF = maxF)
+  ### project forward with FLasher::fwd
+  om@stock[] <- fwd(object = om@stock, control = ctrl, sr = om@sr, 
+                    residuals = deviances, maxF = maxF)
   
   ### return stock
-  return(list(object = stk))
+  return(list(om = om))
   
 }
 

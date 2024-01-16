@@ -17,7 +17,7 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
 ### load packages
 ### use mse fork from shfischer/mse, branch mseDL2.0 
 ### remotes::install_github("shfischer/mse", ref = "mseDL2.0)
-req_pckgs <- c("FLCore", "FLash", "FLBRP", "mse", "FLife", 
+req_pckgs <- c("FLCore", "FLasher", "FLBRP", "mse", "FLife", 
                "tidyr", "dplyr", "foreach", "doParallel")
 for (i in req_pckgs) library(package = i, character.only = TRUE)
 
@@ -71,11 +71,10 @@ if (identical(fhist, "random")) {
                y = c(middle[x], end[x]), 
                n = (yrs_hist/2) + 1)$y[-1])
     }))
-  
-  f_array <- array(dim = c(yrs_hist, 3, n_iter),
-                   dimnames = list(seq(yrs_hist), c("min","val","max"),
-                                   iter = seq(n_iter)))
-  f_array[, "val", ] <- c(t(df))
+  ### convert into FLQuant for FLasher
+  f_quant <- FLQuant(NA, dimnames = list(year = seq(yrs_hist),
+                                         iter = seq(n_iter)))
+  f_quant[] <- t(df)
 }
 
 ### ------------------------------------------------------------------------ ###
@@ -132,7 +131,7 @@ if (exists("OM")) {
         fs <- c(fs, rate ^ (1:25) * f0)
         
         ### control object
-        ctrl <- fwdControl(data.frame(year = 2:100, quantity = "f", val = fs))
+        ctrl <- fwdControl(data.frame(year = 2:100, quant = "f", value = fs))
         
       ### roller-coaster
       } else if (isTRUE(fhist == "roller-coaster")) {
@@ -153,32 +152,20 @@ if (exists("OM")) {
                 rev(rate_down ^ seq(yrs_down) * f0_down))
         
         ### control object
-        ctrl <- fwdControl(data.frame(year = 2:100, quantity = "f", val = fs))
+        ctrl <- fwdControl(data.frame(year = 2:100, quant = "f", value = fs))
         
       ### random F trajectories
       } else if (isTRUE(fhist == "random")) {
         
-        ### control object template
-        ctrl <- fwdControl(data.frame(year = seq(yrs_hist), 
-                                      quantity = c("f"), val = NA))
-        ### add iterations
-        ctrl@trgtArray <- f_array
         ### target * Fcrash
-        ctrl@trgtArray[,"val",] <- ctrl@trgtArray[,"val",] * 
-          c(refpts["crash", "harvest"]) * 1
-        
+        ctrl <- fwdControl(target = f_quant * c(refpts["crash", "harvest"]), 
+                           quant = "f")
+
       }
       
       ### project fishing history
-      stk_stf <- fwd(stk, ctrl, sr = stk_sr, sr.residuals = residuals(stk_sr),
-                     sr.residuals.mult = TRUE, maxF = 5) 
-      #plot(stk_stf, iter = 1:50)
-      #plot(ssb(stk_stf), iter = 1:50)
-      ### run a few times to get closer to target
-      # for (i in 1:5) {
-      #   stk_stf <- fwd(stk_stf, ctrl, sr = stk_sr,
-      #                  sr.residuals.mult = TRUE, maxF = 4)
-      # }
+      stk_stf <- fwd(stk, control = ctrl, sr = stk_sr, 
+                     residuals = residuals(stk_sr), maxF = 5)
       
       ### save OM files
       name(stk_stf) <- stock
