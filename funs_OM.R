@@ -10,7 +10,7 @@ input_mp <- function(stocks,
                      MP, ### e.g. "hr", "const_catch", "CC_f"
                      hist_yr_min = 50, ### first year
                      scenario = "",
-                     idx_sel = "tsb", ### index selectivity
+                     idx_sel = ifelse(isTRUE(MP %in% c("hr")), "tsb", "standard"), ### index selectivity
                      n_blocks = 1, 
                      ### index uncertainty & auto-correlation
                      sigmaB = 0.2,
@@ -41,7 +41,7 @@ input_mp <- function(stocks,
                      ### phcr
                      exp_r = 1, exp_f = 1, exp_b = 1, ### exponents (rfb only)
                      ### hcr
-                     interval = 1, ### TAC interval
+                     interval = ifelse(isTRUE(MP %in% c("rfb", "rb")), 2, 1), ### TAC interval
                      ### is
                      upper_constraint = 1.2, ### uncertainty cap
                      lower_constraint = 0.7, 
@@ -150,6 +150,16 @@ input_mp <- function(stocks,
                                PA_status = FALSE, PA_status_dev = FALSE,
                                PA_Bmsy = c(refpts(brps[[stock]])["msy", "ssb"]), 
                                PA_Fmsy = c(refpts(brps[[stock]])["msy", "harvest"])))
+    } else if (identical(MP, "rfb")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idxB = TRUE, idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
+                               lngth = TRUE, lngth_dev = TRUE,
+                               lngth_par = pars_l,
+                               PA_status = FALSE, PA_status_dev = FALSE,
+                               PA_Bmsy = c(refpts(brps[[stock]])["msy", "ssb"]), 
+                               PA_Fmsy = c(refpts(brps[[stock]])["msy", "harvest"])))
     } else if (identical(MP, "const_catch")) {
       oem <- FLoem(method = obs_generic,
                    observations = list(stk = stk, idx = idx), 
@@ -247,7 +257,7 @@ input_mp <- function(stocks,
 
     ### length index
     ### only include when required for MP
-    if (isTRUE(MP %in% c("CC_f", "CL"))) {
+    if (isTRUE(MP %in% c("CC_f", "CL", "rfb"))) {
       oem@args$lngth <- TRUE
       oem@args$lngth_dev <- TRUE
       oem@args$lngth_par <- pars_l
@@ -274,32 +284,32 @@ input_mp <- function(stocks,
     
     ### biomass index deviations ####
     set.seed(695)
-    if (isTRUE(MP %in% c("hr"))) {
+    if (isTRUE(MP %in% c("hr", "rfb"))) {
       index(oem@deviances$idx$idxB) <- 
         rlnoise(n = dims(idx$idxB)$iter, index(idx$idxB) %=% 0, 
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "CL"))) {
+    if (isTRUE(MP %in% c("hr", "CL", "rfb"))) {
       index(oem@deviances$idx$idxL) <- 
         rlnoise(n = dims(idx$idxL)$iter, index(idx$idxL) %=% 0, 
         sd = sigmaL, b = sigmaL_rho)
     }
     ### replicate previous deviates from GA paper
     set.seed(696)
-    if (isTRUE(MP %in% c("hr"))) {
+    if (isTRUE(MP %in% c("hr", "rfb"))) {
       index(oem@deviances$idx$idxB)[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxB)$iter,
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "CL"))) {
+    if (isTRUE(MP %in% c("hr", "CL", "rfb"))) {
       index(oem@deviances$idx$idxL)[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxL)$iter, 
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
                 sd = sigmaL, b = sigmaL_rho)
     }
     
-    if (MP %in% c("hr", "CC_f")) {
+    if (MP %in% c("hr", "rfb", "CC_f")) {
       ### biomass index reference points
       ### lowest observed index in last 50 years
       I_loss <- apply(window(index(oem@observations$idx$idxB) * 
@@ -403,6 +413,36 @@ input_mp <- function(stocks,
                                    cap_below_b = cap_below_b))
       ))
     
+    } else if (identical(MP, "rfb")) {
+      
+      ### set up MP ctrl object
+      ctrl <- ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_comps,
+                      args = list(comp_r = TRUE, 
+                                  comp_f = TRUE, 
+                                  comp_c = TRUE, comp_A = FALSE,
+                                  comp_b = TRUE,
+                                  comp_m = multiplier,
+                                  pa_buffer = FALSE, 
+                                  comp_i = FALSE, 
+                                  idxB_lag = 1, 
+                                  idxB_range_1 = 2, idxB_range_2 = 3,
+                                  catch_lag = 1, catch_range = 1,
+                                  Lref = Lref, 
+                                  I_trigger = I_trigger,
+                                  idxL_lag = 1, idxL_range = 1
+                      )),
+        phcr = mseCtrl(method = phcr_comps,
+                       args = list(exp_r = 1, exp_f = 1, exp_b = 1)),
+        hcr = mseCtrl(method = hcr_comps,
+                      args = list(interval = interval)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval, 
+                                   upper_constraint = upper_constraint, 
+                                   lower_constraint = lower_constraint, 
+                                   cap_below_b = cap_below_b))
+      ))
+      
     } else if (identical(MP, "const_catch")) {
       ### const_catch ####
       ### set up MP ctrl object
