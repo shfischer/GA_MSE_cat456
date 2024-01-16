@@ -646,12 +646,13 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     
   } else {
     
-    ### use last year's advice
-    advice <- tracking[[1]]["hcr", ac(ay - 1)]
+    ### use last year's advice (saved in ay)
+    advice <- tracking[[1]]["hcr", ac(ay)]
     
   }
   
-  ctrl <- fwdControl(FLQuant(advice, dimnames = list(year = ay + 1)), 
+  ctrl <- fwdControl(FLQuant(c(advice), dimnames = list(year = ay + 1,
+                                                        iter = seq(args$it))), 
                      quant = "catch")
   
   return(list(ctrl = ctrl, tracking = tracking))
@@ -680,12 +681,14 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
     
   } else {
     
-    ### use last year's advice
-    advice <- tracking[[1]]["hcr", ac(ay - 1)]
+    ### use last year's advice (saved in ay)
+    advice <- tracking[[1]]["hcr", ac(ay)]
+    
     
   }
 
-  ctrl <- fwdControl(FLQuant(advice, dimnames = list(year = ay + 1)), 
+  ctrl <- fwdControl(FLQuant(c(advice), dimnames = list(year = ay + 1,
+                                                        iter = seq(args$it))), 
                      quant = "catch")
   
   return(list(ctrl = ctrl, tracking = tracking))
