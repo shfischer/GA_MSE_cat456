@@ -164,7 +164,7 @@ input_mp <- function(stocks,
       oem <- FLoem(method = obs_generic,
                    observations = list(stk = stk, idx = idx), 
                    deviances = list(stk = FLQuant(), idx = idx),
-                   args = list(idx_dev = TRUE, ssb_idx = FALSE, tsb_idx = FALSE,
+                   args = list(idxB = FALSE, 
                                lngth = FALSE, lngth_dev = FALSE,
                                PA_status = TRUE, PA_status_dev = FALSE,
                                PA_Bmsy = Inf, ### i.e. B always below Bmsy/2
@@ -175,7 +175,7 @@ input_mp <- function(stocks,
         oem <- FLoem(method = obs_generic,
                      observations = list(stk = stk, idx = idx), 
                      deviances = list(stk = FLQuant(), idx = idx),
-                     args = list(idx_dev = FALSE, ssb_idx = FALSE, tsb_idx = FALSE,
+                     args = list(idxB = FALSE,
                                  lngth = TRUE, lngth_dev = TRUE,
                                  lngth_par = pars_l,
                                  PA_status = TRUE, PA_status_dev = FALSE,
@@ -289,7 +289,7 @@ input_mp <- function(stocks,
         rlnoise(n = dims(idx$idxB)$iter, index(idx$idxB) %=% 0, 
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "CL", "rfb"))) {
+    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL"))) {
       index(oem@deviances$idx$idxL) <- 
         rlnoise(n = dims(idx$idxL)$iter, index(idx$idxL) %=% 0, 
         sd = sigmaL, b = sigmaL_rho)
@@ -302,14 +302,14 @@ input_mp <- function(stocks,
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "CL", "rfb"))) {
+    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL"))) {
       index(oem@deviances$idx$idxL)[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxL)$iter, 
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
                 sd = sigmaL, b = sigmaL_rho)
     }
     
-    if (MP %in% c("hr", "rfb", "CC_f")) {
+    if (MP %in% c("hr", "rfb")) {
       ### biomass index reference points
       ### lowest observed index in last 50 years
       I_loss <- apply(window(index(oem@observations$idx$idxB) * 

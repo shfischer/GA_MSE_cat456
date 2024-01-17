@@ -474,9 +474,8 @@ est_A <- function(catch, ay, iy,
     catch_current <- yearMeans(catch[, ac(catch_yrs)])
   ### other years - use advice
   } else {
-    ### use catch_yrs + 1 because advice value is stored in corresponding
     ### years in tracking object
-    catch_current <- yearMeans(tracking[[1]]["isys", ac(catch_yrs + 1)])
+    catch_current <- yearMeans(tracking[[1]]["isys", ac(catch_yrs)])
   }
   
   return(catch_current)
