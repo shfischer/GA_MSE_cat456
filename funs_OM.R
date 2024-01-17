@@ -549,8 +549,9 @@ input_mp <- function(stocks,
                   args = args,
                   scenario = scenario, 
                   tracking = tracking, 
-                  verbose = TRUE,
-                  refpts = refpts, Blim = Blim)
+                  verbose = TRUE)
+    attr(input, "refpts") <- refpts
+    attr(input, "Blim") <- Blim
     
     return(input)
     

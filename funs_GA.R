@@ -361,9 +361,9 @@ mp_stats <- function(input, res_mp, stat_yrs = "all",
   mapply(function(input_i, res_mp_i) {
     
     ### stock metrics
-    SSBs <- FLCore::window(ssb(res_mp_i@stock), start = 101)
-    Fs <- FLCore::window(fbar(res_mp_i@stock), start = 101)
-    Cs <- FLCore::window(catch(res_mp_i@stock), start = 101)
+    SSBs <- FLCore::window(ssb(res_mp_i@om@stock), start = 101)
+    Fs <- FLCore::window(fbar(res_mp_i@om@stock), start = 101)
+    Cs <- FLCore::window(catch(res_mp_i@om@stock), start = 101)
     yrs <- dim(SSBs)[2]
     its <- dim(SSBs)[6]
     ### collapse correction
@@ -387,12 +387,12 @@ mp_stats <- function(input, res_mp, stat_yrs = "all",
     }
     ### extend Catch to include ICV calculation from last historical year
     Cs_long <- FLCore::window(Cs, start = 100)
-    Cs_long[, ac(100)] <- catch(res_mp_i@stock)[, ac(100)]
+    Cs_long[, ac(100)] <- catch(res_mp_i@om@stock)[, ac(100)]
     ### refpts
-    Bmsy <- c(input_i$refpts["msy", "ssb"])
-    Fmsy <- c(input_i$refpts["msy", "harvest"])
-    Cmsy <- c(input_i$refpts["msy", "yield"])
-    Blim <- input_i$Blim
+    Bmsy <- c(attr(input_i, "refpts")["msy", "ssb"])
+    Fmsy <- c(attr(input_i, "refpts")["msy", "harvest"])
+    Cmsy <- c(attr(input_i, "refpts")["msy", "yield"])
+    Blim <- attr(input_i, "Blim")
     ### TAC interval
     TAC_intvl <- input_i$ctrl$hcr@args$interval
     
