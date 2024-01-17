@@ -765,3 +765,59 @@ stats_cond %>%
 ggsave(filename = "output/plots/constant_catch/CC_CC_f_opt.png",
        type = "cairo", 
        width = 17, height = 8, units = "cm", dpi = 600)
+
+
+### ------------------------------------------------------------------------ ###
+### CL - pollack - default - without beta ####
+### ------------------------------------------------------------------------ ###
+
+res_rnd <- readRDS("output/CL/500_50/baseline/random/pol/mp_0.1_0_0.1_0.6_0_0.75_0.1__3_0.1_0.2_0.2_0.1_0.05_999_1.rds")
+res_ow <- readRDS("output/CL/500_50/baseline/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0.1__3_0.1_0.2_0.2_0.1_0.05_999_1.rds")
+
+plot(FLQuants(SSB = ssb(res_rnd@stock), 
+              Catch = catch(res_rnd@stock), 
+              Fbar = fbar(res_rnd@stock)), iter = 1:5) + 
+  theme_bw()
+ggsave(filename = "output/plots/CL/pol_default_rnd_without_beta.png",
+       type = "cairo", 
+       width = 12, height = 12, units = "cm", dpi = 600)
+plot(FLQuants(SSB = ssb(res_ow@stock), 
+              Catch = catch(res_ow@stock),
+              Fbar = fbar(res_ow@stock)), iter = 1:5) + 
+  theme_bw()
+ggsave(filename = "output/plots/CL/pol_default_ow_without_beta.png",
+       type = "cairo", 
+       width = 12, height = 12, units = "cm", dpi = 600)
+
+### ------------------------------------------------------------------------ ###
+### CL - pollack - default - with beta ####
+### ------------------------------------------------------------------------ ###
+
+res_rnd <- readRDS("output/CL/500_50/baseline/random/pol/mp_0.1_0_0.1_0.6_0_0.75_0.1__3_0.1_0.2_0.2_0.1_0.05_0.1_1.rds")
+res_ow <- readRDS("output/CL/500_50/baseline/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0.1__3_0.1_0.2_0.2_0.1_0.05_0.1_1.rds")
+
+plot(FLQuants(SSB = ssb(res_rnd@stock), 
+              Catch = catch(res_rnd@stock), 
+              Fbar = fbar(res_rnd@stock)), iter = 1:5) + 
+  theme_bw()
+ggsave(filename = "output/plots/CL/pol_default_rnd_with_beta.png",
+       type = "cairo", 
+       width = 12, height = 12, units = "cm", dpi = 600)
+plot(FLQuants(SSB = ssb(res_ow@stock), 
+              Catch = catch(res_ow@stock),
+              Fbar = fbar(res_ow@stock)), iter = 1:5) + 
+  theme_bw()
+ggsave(filename = "output/plots/CL/pol_default_ow_with_beta.png",
+       type = "cairo", 
+       width = 12, height = 12, units = "cm", dpi = 600)
+
+
+### optimised
+res_ow <- readRDS("output/CL/500_50/baseline/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0.1__5_0.21_0.08_0.3_0.5_0_0_1.08.rds")
+plot(FLQuants(SSB = ssb(res_ow@stock), 
+              Catch = catch(res_ow@stock),
+              Fbar = fbar(res_ow@stock)), iter = 1:5) + 
+  theme_bw()
+ggsave(filename = "output/plots/CL/pol_default_ow_with_beta_opt.png",
+       type = "cairo", 
+       width = 12, height = 12, units = "cm", dpi = 600)
