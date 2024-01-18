@@ -81,7 +81,7 @@ Running under: Windows 10 x64 (build 19043)
 
 The package versions and their dependencies are recorded with the R
 package [renv](https://rstudio.github.io/renv/) and stored in the file
-[renv.lock](https://github.com/shfischer/GA_MSE_HR/blob/harvest_rate_R4.2/renv.lock).
+[renv.lock](https://github.com/shfischer/GA_MSE_cat456/blob/cat456/renv.lock).
 The exact package version can be restored by cloning this repository,
 checking out the current branch (`cat456`), navigating into this folder
 in R (or setting up a project), installing the renv package
@@ -100,20 +100,20 @@ See [renv](https://rstudio.github.io/renv/) and the package
 documentation for details.
 
 The framework is based on the Fisheries Library in R (FLR) framework and
-uses the [FLR packages](https://flr-project.org/) `FLCore`, `FLash`,
+uses the [FLR packages](https://flr-project.org/) `FLCore`, `FLasher`,
 `FLBRP`, `ggplotFL`, `mse`. See
-[renv.lock](https://github.com/shfischer/GA_MSE_HR/blob/cat456/renv.lock)
+[renv.lock](https://github.com/shfischer/GA_MSE_cat456/blob/cat456/renv.lock)
 for version details and sources.
 
 The FLR package versions can also be installed manually with `remotes`
 (requires suitable tools to compile R packages):
 
 ``` r
-remotes::install_github(repo = "flr/FLCore", ref = "031f7742bca4b128f80ee3cc386c21d9c00ddcf7")
-remotes::install_github(repo = "flr/FLash", ref = "1008c040b760f68df5101f8aafba28d9e61bba5e", INSTALL_opts = "--no-multiarch")
+remotes::install_github(repo = "flr/FLCore", ref = "9ba6652000574cbaea278ad4b0428b6fb98b4607")
+remotes::install_github(repo = "flr/FLasher", ref = "84268b3bc21941bfde20dc9cbb0cfc3367f570a7", INSTALL_opts = "--no-multiarch")
 # INSTALL_opts = "--no-multiarch" to avoid issues in Windows
-remotes::install_github(repo = "flr/FLBRP", ref = "5fa2b741d81f3d5c3e06b40cc221c98418d3a3c7", INSTALL_opts = "--no-multiarch")
-remotes::install_github(repo = "shfischer/mse", ref = "18ce8c8d51362d5ced27b6c5978912f6da0ab5dc", INSTALL_opts = "--no-multiarch")
+remotes::install_github(repo = "flr/FLBRP", ref = "a76a06a5cf6afbf3cadefe3ed8ce7617a8dfd57c", INSTALL_opts = "--no-multiarch")
+remotes::install_github(repo = "shfischer/mse", ref = "9daf60000fb3a0b7343ff602d0bb479d609f0fe2", INSTALL_opts = "--no-multiarch")
 # and the GA package for running the genetic algorithm
 remotes::install_github(repo = "shfischer/GA", ref = "48c1092437629b86a5310fa2873621621ff0b0e0")
 ```
