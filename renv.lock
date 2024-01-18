@@ -56,9 +56,14 @@
     },
     "FLFishery": {
       "Package": "FLFishery",
-      "Version": "0.3.8",
-      "Source": "Repository",
-      "Repository": "https://flr.r-universe.dev",
+      "Version": "0.3.8.9009",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "FLFishery",
+      "RemoteUsername": "flr",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "04a563447a0c630e43bfc709158d9b37484c1199",
       "Requirements": [
         "FLCore",
         "R",
@@ -66,13 +71,18 @@
         "ggplotFL",
         "methods"
       ],
-      "Hash": "a2e949b1cdaca34a78275879146fb084"
+      "Hash": "194432b9a00786b5fc8ee7b4ae0faade"
     },
     "FLasher": {
       "Package": "FLasher",
-      "Version": "0.7.0",
-      "Source": "Repository",
-      "Repository": "https://flr.r-universe.dev",
+      "Version": "0.7.1.9221",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "FLasher",
+      "RemoteUsername": "flr",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "84268b3bc21941bfde20dc9cbb0cfc3367f570a7",
       "Requirements": [
         "FLCore",
         "FLFishery",
@@ -83,7 +93,7 @@
         "methods",
         "rlang"
       ],
-      "Hash": "02c643c3beab5f90c851bacb6b40fba3"
+      "Hash": "2b1ab68971fb29a053f0074ae804bf87"
     },
     "GGally": {
       "Package": "GGally",
@@ -1284,14 +1294,14 @@
     },
     "mse": {
       "Package": "mse",
-      "Version": "2.2.3.9242",
+      "Version": "2.2.3.9244",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "mse",
-      "RemoteUsername": "flr",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "30807613f51fa64d345dfa4f3afb85d91c7f56d1",
+      "RemoteUsername": "shfischer",
+      "RemoteRef": "dev",
+      "RemoteSha": "9daf60000fb3a0b7343ff602d0bb479d609f0fe2",
       "Requirements": [
         "FLBRP",
         "FLCore",
@@ -1307,7 +1317,7 @@
         "patchwork",
         "progressr"
       ],
-      "Hash": "623c702d1bb1bedad172e016527d2582"
+      "Hash": "7a313e09ef962d5a7f720c09bd16a5fd"
     },
     "munsell": {
       "Package": "munsell",
