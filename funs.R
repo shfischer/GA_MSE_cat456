@@ -97,7 +97,7 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
 
 ### category 4-6 - catch and length data
 est_CL <- function(stk, idx, tracking, args,
-                   n_catch = 5, n_length_1 = 5, n_length_2 = n_length_1,
+                   n_catch = 3, n_length_1 = 3, n_length_2 = n_length_1,
                    r_catch = TRUE, r_length = TRUE, length_average = TRUE,
                    lag_catch = 1, lag_length = 1,
                    interval = 3,
@@ -594,20 +594,23 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     
     ### status: combine catch and length trend
     r_status <- r_length + r_catch
+    ### additional precaution: set to -1 if signals are conflicting
+    r_status[r_status == 0 & r_length*r_catch == 1] <- -1
+    
     
     ### assign values:
-    ### -2: 1 - 2*lambda_lower
+    ### -2: 1 - 1*lambda_lower
     ### -1: 1 - 1*lambda_lower
     ###  0: 1
     ###  1: 1 + 1*lambda_upper
-    ###  2: 1 + 2*lambda_upper
+    ###  2: 1 + 1*lambda_upper
     alpha <- sapply(as.character(r_status), function(x) {
       switch(x,
-             "-2" = 1 - 2*(c(hcrpars["lambda_lower"])[1]),
+             "-2" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
              "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
              "0" = 1,
              "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
-             "2" = 1 + 2*(c(hcrpars["lambda_upper"])[1])
+             "2" = 1 + 1*(c(hcrpars["lambda_upper"])[1])
       )
     })
     
