@@ -38,6 +38,8 @@ input_mp <- function(stocks,
                      idxL_lag = 1, idxL_range = 1,
                      pa_buffer = FALSE, pa_size = 0.8, pa_duration = interval,
                      Lref_mult = 1, ### also for CL
+                     first_catch = "advice",
+                     catch_limit = FALSE,
                      ### phcr
                      exp_r = 1, exp_f = 1, exp_b = 1, ### exponents (rfb only)
                      ### hcr
@@ -503,7 +505,9 @@ input_mp <- function(stocks,
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_CL,
-                      args = list(interval = interval)),
+                      args = list(interval = interval,
+                                  first_catch = first_catch,
+                                  catch_limit = catch_limit)),
         phcr = mseCtrl(method = phcr_CL,
                        args = list(interval = interval,
                                    lambda_upper = lambda_upper,
@@ -518,7 +522,8 @@ input_mp <- function(stocks,
         hcr = mseCtrl(method = hcr_CL,
                       args = list(interval = interval)),
         isys = mseCtrl(method = is_comps,
-                       args = list(interval = interval))
+                       args = list(interval = interval,
+                                   catch_limit = catch_limit))
       ))
       
     }
@@ -531,7 +536,7 @@ input_mp <- function(stocks,
       tracking <- c("r_length", "r_catch", "length_average",
                     "r_threshold", "l_threshold",
                     "lambda_upper", "lambda_lower", 
-                    "A_last")
+                    "A_last", "catch_limit")
     }
     
     ### args

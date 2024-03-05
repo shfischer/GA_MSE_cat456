@@ -101,6 +101,8 @@ est_CL <- function(stk, idx, tracking, args,
                    r_catch = TRUE, r_length = TRUE, length_average = TRUE,
                    lag_catch = 1, lag_length = 1,
                    interval = 3,
+                   first_catch = "advice",
+                   catch_limit = FALSE,
                    ...) {
   
   ay <- args$ay
@@ -110,10 +112,19 @@ est_CL <- function(stk, idx, tracking, args,
   if ((ay - iy) %% interval == 0) {
   
     ### catch/advice
-    ### first year - use catch
+    ### first year
     if (identical(ay, iy)) {
-      ### use current year (ay)
-      advice_current <- catch(stk)[, ac(ay)]
+      ### default: use catch because there is no previous advice
+      if (identical(first_catch, "advice")) {
+        ### use current year (ay)
+        advice_current <- catch(stk)[, ac(ay)]
+      } else {
+        ### limit reference catch to x-th percentile of catch history
+        limit <- apply(window(catch(stk), end = 100), 6, quantile, 
+                       probs = first_catch)
+        last_catch <- catch(stk)[, ac(ay)]
+        advice_current <- pmin(limit, last_catch)
+      }
     } else {
       ### other years - use advice
       advice_current <- tracking[[1]]["isys", ac(ay)]
@@ -173,11 +184,26 @@ est_CL <- function(stk, idx, tracking, args,
     
   }
   
+  ### include absolute catch limit?
+  ### x-th percentile of historical catches
+  ### do only once in first simulation year
+  if (identical(ay, iy)) {
+    if (!isFALSE(catch_limit)) {
+      catch_limit <- apply(window(catch(stk), end = 100), 6, quantile, 
+                           probs = catch_limit)
+    } else {
+      catch_limit <- Inf
+    }
+    tracking[[1]]["catch_limit"] <- catch_limit
+  }
+
+  
   ### save results
   tracking[[1]]["r_length", ac(ay)] <- r_length
   tracking[[1]]["r_catch", ac(ay)] <- r_catch
   tracking[[1]]["length_average", ac(ay)] <- length_average
   tracking[[1]]["A_last", ac(ay)] <- advice_current
+  
   
   return(list(stk = stk, tracking = tracking))
   
@@ -564,6 +590,7 @@ phcr_comps <- function(tracking, args,
 ### apply catch rule
 
 hcr_CL <- function(hcrpars, args, tracking, interval = 2, 
+                   alpha = TRUE, beta = TRUE, beta0 = FALSE,
                    combine_alpha_beta = FALSE,
                    ...) {
   
@@ -604,15 +631,19 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     ###  0: 1
     ###  1: 1 + 1*lambda_upper
     ###  2: 1 + 1*lambda_upper
-    alpha <- sapply(as.character(r_status), function(x) {
-      switch(x,
-             "-2" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
-             "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
-             "0" = 1,
-             "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
-             "2" = 1 + 1*(c(hcrpars["lambda_upper"])[1])
-      )
-    })
+    if (isTRUE(alpha)) {
+      alpha <- sapply(as.character(r_status), function(x) {
+        switch(x,
+               "-2" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
+               "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
+               "0" = 1,
+               "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
+               "2" = 1 + 1*(c(hcrpars["lambda_upper"])[1])
+        )
+      })
+    } else {
+      alpha <- 1
+    }
     
     ### beta - status evaluation from average catch length
     ### (relative to reference length)
@@ -625,18 +656,32 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     if (any(is.na(length_status))) 
       length_status[is.na(length_status)] <- "neutral"
     ### assign values:
-    ### -2: 1 - 2*lambda_lower
-    ### -1: 1 - 1*lambda_lower
-    ###  0: 1
-    ###  1: 1 + 1*lambda_upper
-    ###  2: 1 + 2*lambda_upper
-    beta <- sapply(as.character(length_status), function(x) {
-      switch(x,
-             "negative" = 1 - 1*(c(hcrpars["gamma_lower"])[1]),
-             "neutral" = 1,
-             "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
-      )
-    })
+    ### negative: 1 - gamma_lower
+    ###  neutral: 1
+    ### positive: 1 + gamma_upper
+    if (isTRUE(beta)) {
+      beta <- sapply(as.character(length_status), function(x) {
+        switch(x,
+               "negative" = 1 - 1*(c(hcrpars["gamma_lower"])[1]),
+               "neutral" = 1,
+               "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
+        )
+      })
+    
+    } else {
+      beta <- 1
+    }
+    ### beta0: 
+    ### if length below trigger, advise 0 catch
+    if (isTRUE(beta0)) {
+      beta <- sapply(as.character(length_status), function(x) {
+        switch(x,
+               "negative" = 0,
+               "neutral" = 1,
+               "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
+        )
+      })
+    }
     
     ### calculate advice
 
@@ -705,7 +750,7 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
 
 is_comps <- function(ctrl, args, tracking, interval = 2, 
                      upper_constraint = Inf, lower_constraint = 0, 
-                     cap_below_b = TRUE, ...) {
+                     cap_below_b = TRUE, catch_limit = FALSE, ...) {
   
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
@@ -756,6 +801,11 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
           advice[pos_lower] <- adv_last[,,,,, pos_lower] * lower_constraint
         }
       }
+    }
+    
+    ### absolute catch limit?
+    if (!isFALSE(catch_limit)) {
+      advice <- pmin(advice, c(tracking[[1]]["catch_limit", ac(ay)]))
     }
     
   ### otherwise do nothing here and recycle last year's advice
