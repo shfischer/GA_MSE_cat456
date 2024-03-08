@@ -101,8 +101,8 @@ est_CL <- function(stk, idx, tracking, args,
                    r_catch = TRUE, r_length = TRUE, length_average = TRUE,
                    lag_catch = 1, lag_length = 1,
                    interval = 3,
-                   first_catch = "advice",
-                   catch_limit = FALSE,
+                   first_catch = 1,
+                   catch_limit = 0,
                    ...) {
   
   ay <- args$ay
@@ -115,7 +115,7 @@ est_CL <- function(stk, idx, tracking, args,
     ### first year
     if (identical(ay, iy)) {
       ### default: use catch because there is no previous advice
-      if (identical(first_catch, "advice")) {
+      if (isTRUE(first_catch >= 1)) {
         ### use current year (ay)
         advice_current <- catch(stk)[, ac(ay)]
       } else {
@@ -187,8 +187,9 @@ est_CL <- function(stk, idx, tracking, args,
   ### include absolute catch limit?
   ### x-th percentile of historical catches
   ### do only once in first simulation year
+  ### catch_limit == 0 means no limit, i.e. set to Inf
   if (identical(ay, iy)) {
-    if (!isFALSE(catch_limit)) {
+    if (isTRUE(catch_limit > 0)) {
       catch_limit <- apply(window(catch(stk), end = 100), 6, quantile, 
                            probs = catch_limit)
     } else {
@@ -750,7 +751,7 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
 
 is_comps <- function(ctrl, args, tracking, interval = 2, 
                      upper_constraint = Inf, lower_constraint = 0, 
-                     cap_below_b = TRUE, catch_limit = FALSE, ...) {
+                     cap_below_b = TRUE, catch_limit = 0, ...) {
   
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
@@ -804,7 +805,7 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
     }
     
     ### absolute catch limit?
-    if (!isFALSE(catch_limit)) {
+    if (isTRUE(catch_limit > 0)) {
       advice <- pmin(advice, c(tracking[[1]]["catch_limit", ac(ay)]))
     }
     

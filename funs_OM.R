@@ -38,8 +38,6 @@ input_mp <- function(stocks,
                      idxL_lag = 1, idxL_range = 1,
                      pa_buffer = FALSE, pa_size = 0.8, pa_duration = interval,
                      Lref_mult = 1, ### also for CL
-                     first_catch = "advice",
-                     catch_limit = FALSE,
                      ### phcr
                      exp_r = 1, exp_f = 1, exp_b = 1, ### exponents (rfb only)
                      ### hcr
@@ -55,7 +53,9 @@ input_mp <- function(stocks,
                      gamma_upper = 0.2,
                      r_threshold = 0.05, 
                      l_threshold = 0.1,
-                     #Lref_mult = 1,
+                     #Lref_mult = 1, # defined above
+                     first_catch = "advice",
+                     catch_limit = 0,
                      ...
                      ) {
   
