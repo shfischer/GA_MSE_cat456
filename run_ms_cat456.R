@@ -16,7 +16,7 @@ print(args)
 if (length(args) > 0) {
   
   ### extract arguments
-for (i in seq_along(args)) eval(parse(text = args[[i]]))
+  for (i in seq_along(args)) eval(parse(text = args[[i]]))
   ### set default arguments
   ### parallelization
   if (!exists("use_MPI")) use_MPI <- FALSE
@@ -61,6 +61,8 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
     if (!exists("l_threshold")) l_threshold <- 0.1
     if (!exists("Lref_mult")) Lref_mult <- 1
     if (!exists("multiplier")) multiplier <- 1
+    if (!exists("first_catch")) first_catch <- 1 # no limit
+    if (!exists("catch_limit")) catch_limit <- 0 # no limit
   }
   
   if (!exists("stat_yrs")) stat_yrs <- "all"
@@ -100,8 +102,8 @@ for (i in seq_along(args)) eval(parse(text = args[[i]]))
     if (!exists("obj_risk")) obj_risk <- FALSE
     if (!exists("obj_ICV")) obj_ICV <- FALSE
     if (!exists("obj_ICES_PA")) obj_ICES_PA <- FALSE
-    if (!exists("obj_ICES_PA2")) obj_ICES_PA2 <- FALSE
-    if (!exists("obj_ICES_MSYPA")) obj_ICES_MSYPA <- TRUE
+    if (!exists("obj_ICES_PA2")) obj_ICES_PA2 <- TRUE
+    if (!exists("obj_ICES_MSYPA")) obj_ICES_MSYPA <- FALSE
     if (!exists("risk_threshold")) risk_threshold <- 0.05
     ### GA
     if (!exists("add_suggestions")) add_suggestions <- FALSE
@@ -218,7 +220,7 @@ hr_params <- c(
   "multiplier", "interval", "pa_buffer", "pa_size", "pa_duration",
   "upper_constraint", "lower_constraint",
   "lambda_upper", "lambda_lower", "gamma_lower", "gamma_upper", "r_threshold",
-  "l_threshold", "Lref_mult"
+  "l_threshold", "Lref_mult", "first_catch", "catch_limit"
 )
 hr_params <- as.data.frame(mget(hr_params, ifnotfound = NA))
 names(hr_params)[1] <- "stocks"
@@ -361,51 +363,60 @@ if (isFALSE(ga_search)) {
                   "r_threshold",  ### 2 decimal digits; 0.00-0.50
                   "l_threshold",  ### 2 decimal digits; 0.00-0.50
                   "Lref_mult",    ### 2 decimal digits; 0.00-2.00
-                  "multiplier"    ### 2 decimal digits; 0.00-2.00
+                  "multiplier",   ### 2 decimal digits; 0.00-2.00
+                  "first_catch",  ### 2 decimal digits; 0.00-1.00, 
+                  "catch_limit"   ### 2 decimal digits; 0.00-1.00, 0->no limit
                   )
-    ga_default <- c(3,  0.2,  0.1,  0.2,  0.1, 0.05,  0.1, 1, 1) ### default values
-    ga_lower <-   c(1,    0,    0,    0,    0,    0,    0, 0, 0) ### minima
-    ga_upper <-   c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 2, 2) ### maxima
+    ga_default <- c(3,  0.2,  0.1,  0.2,  0.1, 0.05,  0.1, 1, 1, 1, 0) ### default values
+    ga_lower <-   c(1,    0,    0,    0,    0,    0,    0, 0, 0,   0,   0) ### minima
+    ga_upper <-   c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 2, 2,   1,   1) ### maxima
     ### ga() samples uniform real (double) values from lower ga_lower to 
     ### ga_upper and these are then rounded to the significant digits
     ### -> adjust ga_lower/upper so that minima/maxima have same probability
-    ga_step  <-   c(1, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
+    ga_step  <-   c(1, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 
+                    0.01)
     ga_lower <- ga_lower - (ga_step/2 - .Machine$double.eps)
     ga_upper <- ga_upper + (ga_step/2 - .Machine$double.eps)
     ### add some suggested parameterisations
     ga_suggestions <- rbind(### default
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             ### zero catch
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0, 1, 0), 
                             ### interval
-                            c(1, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(4, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(5, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
+                            c(1, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(4, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(5, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             ### lambda/gamma
-                            c(3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.3, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.05, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.2, 0.2, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.3, 0.1, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.05, 0.05, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.3, 0.05, 0.1, 1, 1), 
+                            c(3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.3, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.05, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.2, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.3, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.05, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.3, 0.05, 0.1, 1, 1, 1, 0), 
                             ### thresholds
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.01, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.10, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.20, 0.1, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.05, 1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.2, 1, 1), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.01, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.10, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.20, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.05, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.2, 1, 1, 1, 0), 
                             ### multipliers
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.8, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.9, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.1, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.2, 1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.8), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.9), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.1), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.2)
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.8, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.9, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.2, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.8, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.9, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.2, 1, 0),
+                            ### catch limits
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.5, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.4, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 1.0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.8), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.5) 
                             )
   }
   

@@ -55,6 +55,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     params[c(6, 7)] <- round(params[c(6, 7)], 2) ### r/l treshold
     params[8] <- round(params[8], 2) ### Lref_mult
     params[9] <- round(params[9], 2) ### multiplier
+    params[10:11] <- round(params[10:11], 2) ### catch limits
   }
   
   ### check for files?
@@ -203,6 +204,8 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$phcr@args$interval <- params[1]
         x$ctrl$hcr@args$interval <- params[1]
         x$ctrl$isys@args$interval <- params[1]
+        x$ctrl$est@args$first_catch  <- params[10]
+        x$ctrl$est@args$catch_limit  <- params[11]
         ### lambda
         x$ctrl$phcr@args$lambda_lower <- params[2]
         x$ctrl$phcr@args$lambda_upper <- params[3]
@@ -216,6 +219,8 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$phcr@args$Lref_mult <- params[8]
         ### multiplier
         x$ctrl$phcr@args$multiplier <- params[9]
+        ### catch limit (absolute relative to past)
+        x$ctrl$isys@args$catch_limit  <- params[11]
         return(x)
       })
     }
