@@ -30,14 +30,14 @@
     },
     "FLCore": {
       "Package": "FLCore",
-      "Version": "2.6.19.9104",
+      "Version": "2.6.20.9002",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "FLCore",
       "RemoteUsername": "flr",
       "RemoteRef": "HEAD",
-      "RemoteSha": "9ba6652000574cbaea278ad4b0428b6fb98b4607",
+      "RemoteSha": "ccbf75f7738d0e104b754726b3ae97f2be3de312",
       "Requirements": [
         "MASS",
         "Matrix",
@@ -52,7 +52,7 @@
         "stats4",
         "utils"
       ],
-      "Hash": "f1b340d7b0dc2dc0dd56a99fbe064594"
+      "Hash": "94df96ae146bd4efb728dc8f89324579"
     },
     "FLFishery": {
       "Package": "FLFishery",
@@ -1294,14 +1294,14 @@
     },
     "mse": {
       "Package": "mse",
-      "Version": "2.2.3.9244",
+      "Version": "2.2.3.9252",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "mse",
       "RemoteUsername": "shfischer",
-      "RemoteRef": "dev",
-      "RemoteSha": "9daf60000fb3a0b7343ff602d0bb479d609f0fe2",
+      "RemoteRef": "b1ebca3",
+      "RemoteSha": "b1ebca365f5d2e2c3bc5f23143efc3df4634c11d",
       "Requirements": [
         "FLBRP",
         "FLCore",
@@ -1317,7 +1317,7 @@
         "patchwork",
         "progressr"
       ],
-      "Hash": "7a313e09ef962d5a7f720c09bd16a5fd"
+      "Hash": "ef6fb1ffc41cf693efe21ae903c728e9"
     },
     "munsell": {
       "Package": "munsell",
