@@ -100,88 +100,78 @@ est_CL <- function(stk, idx, tracking, args,
                    n_catch = 3, n_length_1 = 3, n_length_2 = n_length_1,
                    r_catch = TRUE, r_length = TRUE, length_average = TRUE,
                    lag_catch = 1, lag_length = 1,
-                   interval = 3,
                    first_catch = 1,
                    catch_limit = 0,
                    ...) {
   
-  ay <- args$ay
-  iy <- args$iy
+  ay <- args$ay ### current year
+  iy <- args$iy ### first simulation year
+  frq <- args$frq ### advice interval
   
-  ### only run "model" when new advice is required
-  if ((ay - iy) %% interval == 0) {
-  
-    ### catch/advice
-    ### first year
-    if (identical(ay, iy)) {
-      ### default: use catch because there is no previous advice
-      if (isTRUE(first_catch >= 1)) {
-        ### use current year (ay)
-        advice_current <- catch(stk)[, ac(ay)]
-      } else {
-        ### limit reference catch to x-th percentile of catch history
-        limit <- apply(window(catch(stk), end = 100), 6, quantile, 
-                       probs = first_catch)
-        last_catch <- catch(stk)[, ac(ay)]
-        advice_current <- pmin(limit, last_catch)
-      }
+  ### catch/advice
+  ### first year
+  if (identical(ay, iy)) {
+    ### default: use catch because there is no previous advice
+    if (isTRUE(first_catch >= 1)) {
+      ### use current year (ay)
+      advice_current <- catch(stk)[, ac(ay)]
     } else {
-      ### other years - use advice
-      advice_current <- tracking[[1]]["isys", ac(ay)]
+      ### limit reference catch to x-th percentile of catch history
+      limit <- apply(window(catch(stk), end = 100), 6, quantile, 
+                     probs = first_catch)
+      last_catch <- catch(stk)[, ac(ay)]
+      advice_current <- pmin(limit, last_catch)
     }
-    
-    ### linear model of (mean standardised) length indicator
-    if (isTRUE(r_length)) {
-      r_length <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
-                                          length.out = n_length_1))], 
-                        6, function(x) {
-        tmp_data <- as.data.frame(FLQuant(x))
-        tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
-        out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
-                   silent = TRUE)
-        if (is(out, "try-error")) {
-          return(0) ### return 0, i.e. no trend detected
-        } else {
-          return(out)
-        }
-      })
-    } else {
-      r_length <- 0
-    }
-    
-    ### linear model of (mean standardised) catch
-    if (isTRUE(r_catch)) {
-      r_catch <- apply(catch(stk)[, ac(seq(to = ay - lag_catch, 
-                                           length.out = n_catch))], 
-                       6, function(x) {
-        tmp_data <- as.data.frame(FLQuant(x))
-        tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
-        out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
-                   silent = TRUE)
-        if (is(out, "try-error")) {
-          return(0) ### return 0, i.e. no trend detected
-        } else {
-          return(out)
-        }
-      })
-    } else {
-      r_catch <- 0
-    }
-    
-    ### average length
-    if (isTRUE(length_average)) {
-      length_average <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
-                                                length.out = n_length_2))],
-                              6, mean, na.rm = TRUE)
-    } else {
-      length_average <- NA
-    }
-  
   } else {
-    
-    ### dummy values when no new advice calculated
-    r_length <- r_catch <- length_average <- advice_current <- NA
-    
+    ### other years - use advice
+    advice_current <- tracking[[1]]["isys", ac(ay)]
+  }
+  
+  ### linear model of (mean standardised) length indicator
+  if (isTRUE(r_length)) {
+    r_length <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
+                                        length.out = n_length_1))], 
+                      6, function(x) {
+      tmp_data <- as.data.frame(FLQuant(x))
+      tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
+      out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
+                 silent = TRUE)
+      if (is(out, "try-error")) {
+        return(0) ### return 0, i.e. no trend detected
+      } else {
+        return(out)
+      }
+    })
+  } else {
+    r_length <- 0
+  }
+  
+  ### linear model of (mean standardised) catch
+  if (isTRUE(r_catch)) {
+    r_catch <- apply(catch(stk)[, ac(seq(to = ay - lag_catch, 
+                                         length.out = n_catch))], 
+                     6, function(x) {
+      tmp_data <- as.data.frame(FLQuant(x))
+      tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
+      out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
+                 silent = TRUE)
+      if (is(out, "try-error")) {
+        return(0) ### return 0, i.e. no trend detected
+      } else {
+        return(out)
+      }
+    })
+  } else {
+    r_catch <- 0
+  }
+  
+  ### average length
+  if (isTRUE(length_average)) {
+    length_average <- apply(index(idx$idxL)[, ac(seq(to = ay - lag_length, 
+                                              length.out = n_length_2))],
+                            6, mean, na.rm = TRUE)
+  } else {
+    length_average <- NA
   }
   
   ### include absolute catch limit?
@@ -522,7 +512,7 @@ phcr_CL <- function(tracking, args,
                     Lref = NA, Lref_mult = 1,
                     ...) {
   
-  ay <- args$ay
+  ay <- args$ay ### current year
   
   ### get values from tracking
   hcrpars <- tracking[[1]][c("A_last",
@@ -590,117 +580,114 @@ phcr_comps <- function(tracking, args,
 ### ------------------------------------------------------------------------ ###
 ### apply catch rule
 
-hcr_CL <- function(hcrpars, args, tracking, interval = 2, 
+hcr_CL <- function(hcrpars, args, tracking,
                    alpha = TRUE, beta = TRUE, beta0 = FALSE,
                    combine_alpha_beta = FALSE,
                    ...) {
   
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
+  frq <- args$frq ### advice interval
+  fy <- args$fy ### final simulation year
   
-  ### check if new advice requested
-  if ((ay - iy) %% interval == 0) {
-    
-    ### alpha - trends from catch and length data
-    
-    ### split into groups:
-    ### -1: value < -0.01
-    ###  0: -0.01 < value < 0.01
-    ### +1: value > 0.01
-    r_length <- cut(c(hcrpars["r_length"]), 
-                    breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])), 
-                               unique(c(hcrpars["r_threshold"])), Inf), 
-                    labels = c(-1, 0, 1))
-    if (any(is.na(r_length))) r_length[is.na(r_length)] <- 0
-    r_length <- as.numeric(as.character(r_length))
-    r_catch <- cut(c(hcrpars["r_catch"]), 
-                   breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])),
-                              unique(c(hcrpars["r_threshold"])), Inf), 
-                   labels = c(-1, 0, 1))
-    r_catch <- as.numeric(as.character(r_catch))
-    if (any(is.na(r_catch))) r_catch[is.na(r_catch)] <- 0
-    
-    ### status: combine catch and length trend
-    r_status <- r_length + r_catch
-    ### additional precaution: set to -1 if signals are conflicting
-    r_status[r_status == 0 & r_length*r_catch == 1] <- -1
-    
-    
-    ### assign values:
-    ### -2: 1 - 1*lambda_lower
-    ### -1: 1 - 1*lambda_lower
-    ###  0: 1
-    ###  1: 1 + 1*lambda_upper
-    ###  2: 1 + 1*lambda_upper
-    if (isTRUE(alpha)) {
-      alpha <- sapply(as.character(r_status), function(x) {
-        switch(x,
-               "-2" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
-               "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
-               "0" = 1,
-               "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
-               "2" = 1 + 1*(c(hcrpars["lambda_upper"])[1])
-        )
-      })
-    } else {
-      alpha <- 1
-    }
-    
-    ### beta - status evaluation from average catch length
-    ### (relative to reference length)
-    length_status <- cut(c(hcrpars["length_average"]/
-                             (hcrpars["Lref"]*hcrpars["Lref_mult"])), 
-                         breaks = c(-Inf, 1 - unique(c(hcrpars["l_threshold"])), 
-                                    1 + unique(c(hcrpars["l_threshold"])), Inf), 
-                         labels = c("negative", "neutral", "positive"))
-    
-    if (any(is.na(length_status))) 
-      length_status[is.na(length_status)] <- "neutral"
-    ### assign values:
-    ### negative: 1 - gamma_lower
-    ###  neutral: 1
-    ### positive: 1 + gamma_upper
-    if (isTRUE(beta)) {
-      beta <- sapply(as.character(length_status), function(x) {
-        switch(x,
-               "negative" = 1 - 1*(c(hcrpars["gamma_lower"])[1]),
-               "neutral" = 1,
-               "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
-        )
-      })
-    
-    } else {
-      beta <- 1
-    }
-    ### beta0: 
-    ### if length below trigger, advise 0 catch
-    if (isTRUE(beta0)) {
-      beta <- sapply(as.character(length_status), function(x) {
-        switch(x,
-               "negative" = 0,
-               "neutral" = 1,
-               "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
-        )
-      })
-    }
-    
-    ### calculate advice
-
-    if (!isTRUE(combine_alpha_beta)) {
-      ### only apply alpha if beta != 1  
-      alpha[which(beta != 1)] <- 1
-    }
-    advice <- hcrpars["A_last"] * alpha * beta * hcrpars["multiplier"]
-    
+  ### alpha - trends from catch and length data
+  
+  ### split into groups:
+  ### -1: value < -0.01
+  ###  0: -0.01 < value < 0.01
+  ### +1: value > 0.01
+  r_length <- cut(c(hcrpars["r_length"]), 
+                  breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])), 
+                             unique(c(hcrpars["r_threshold"])), Inf), 
+                  labels = c(-1, 0, 1))
+  if (any(is.na(r_length))) r_length[is.na(r_length)] <- 0
+  r_length <- as.numeric(as.character(r_length))
+  r_catch <- cut(c(hcrpars["r_catch"]), 
+                 breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])),
+                            unique(c(hcrpars["r_threshold"])), Inf), 
+                 labels = c(-1, 0, 1))
+  r_catch <- as.numeric(as.character(r_catch))
+  if (any(is.na(r_catch))) r_catch[is.na(r_catch)] <- 0
+  
+  ### status: combine catch and length trend
+  r_status <- r_length + r_catch
+  ### additional precaution: set to -1 if signals are conflicting
+  r_status[r_status == 0 & r_length*r_catch == 1] <- -1
+  
+  
+  ### assign values:
+  ### -2: 1 - 1*lambda_lower
+  ### -1: 1 - 1*lambda_lower
+  ###  0: 1
+  ###  1: 1 + 1*lambda_upper
+  ###  2: 1 + 1*lambda_upper
+  if (isTRUE(alpha)) {
+    alpha <- sapply(as.character(r_status), function(x) {
+      switch(x,
+             "-2" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
+             "-1" = 1 - 1*(c(hcrpars["lambda_lower"])[1]),
+             "0" = 1,
+             "1" = 1 + 1*(c(hcrpars["lambda_upper"])[1]),
+             "2" = 1 + 1*(c(hcrpars["lambda_upper"])[1])
+      )
+    })
   } else {
-    
-    ### use last year's advice (saved in ay)
-    advice <- tracking[[1]]["hcr", ac(ay)]
-    
+    alpha <- 1
   }
   
-  ctrl <- fwdControl(FLQuant(c(advice), dimnames = list(year = ay + 1,
-                                                        iter = seq(args$it))), 
+  ### beta - status evaluation from average catch length
+  ### (relative to reference length)
+  length_status <- cut(c(hcrpars["length_average"]/
+                           (hcrpars["Lref"]*hcrpars["Lref_mult"])), 
+                       breaks = c(-Inf, 1 - unique(c(hcrpars["l_threshold"])), 
+                                  1 + unique(c(hcrpars["l_threshold"])), Inf), 
+                       labels = c("negative", "neutral", "positive"))
+  
+  if (any(is.na(length_status))) 
+    length_status[is.na(length_status)] <- "neutral"
+  ### assign values:
+  ### negative: 1 - gamma_lower
+  ###  neutral: 1
+  ### positive: 1 + gamma_upper
+  if (isTRUE(beta)) {
+    beta <- sapply(as.character(length_status), function(x) {
+      switch(x,
+             "negative" = 1 - 1*(c(hcrpars["gamma_lower"])[1]),
+             "neutral" = 1,
+             "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
+      )
+    })
+  
+  } else {
+    beta <- 1
+  }
+  ### beta0: 
+  ### if length below trigger, advise 0 catch
+  if (isTRUE(beta0)) {
+    beta <- sapply(as.character(length_status), function(x) {
+      switch(x,
+             "negative" = 0,
+             "neutral" = 1,
+             "positive" = 1 + 1*(c(hcrpars["gamma_upper"])[1])
+      )
+    })
+  }
+  
+  ### calculate advice
+
+  if (!isTRUE(combine_alpha_beta)) {
+    ### only apply alpha if beta != 1  
+    alpha[which(beta != 1)] <- 1
+  }
+  advice <- hcrpars["A_last"] * alpha * beta * hcrpars["multiplier"]
+  
+  ### get advice years
+  advice_yrs <- seq(ay + 1, length.out = frq)
+  #advice_yrs <- advice_yrs[advice_yrs <= fy]
+  
+  ctrl <- fwdControl(FLQuant(rep(c(advice), each = length(advice_yrs)), 
+                             dimnames = list(year = advice_yrs,
+                                             iter = seq(args$it))), 
                      quant = "catch")
   
   return(list(ctrl = ctrl, tracking = tracking))
@@ -755,69 +742,63 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
   
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
+  frq <- args$frq ### advice interval
   
-  advice <- as.vector(ctrl@iters[, "value", ])
+  ### extract advice value 
+  ### keep only first year's values if there are more years
+  advice <- as.vector(ctrl@iters[1, "value", ])
   
-  ### check if new advice requested
-  if ((ay - iy) %% interval == 0) {
-  
-    ### apply TAC constraint, if requested
-    if (!is.infinite(upper_constraint) | lower_constraint != 0) {
-      
-      ### get last advice
-      if (isTRUE(ay == iy)) {
-        ### use OM value in first year of projection
-        adv_last <- tracking[[1]]["C.om", ac(iy - 1)]
-      } else {
-        adv_last <- tracking[[1]]["isys", ac(ay)]
+  ### apply TAC constraint, if requested
+  if (!is.infinite(upper_constraint) | lower_constraint != 0) {
+    
+    ### get last advice
+    if (isTRUE(ay == iy)) {
+      ### use OM value in first year of projection
+      adv_last <- tracking[[1]]["C.om", ac(iy - 1)]
+    } else {
+      adv_last <- tracking[[1]]["isys", ac(ay)]
+    }
+    ### ratio of new advice/last advice
+    adv_ratio <- advice/adv_last
+    
+    ### upper constraint
+    if (!is.infinite(upper_constraint)) {
+      ### find positions
+      pos_upper <- which(adv_ratio > upper_constraint)
+      ### turn of constraint when index below Itrigger?
+      if (isFALSE(cap_below_b)) {
+        pos_upper <- setdiff(pos_upper, 
+                             which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
       }
-      ### ratio of new advice/last advice
-      adv_ratio <- advice/adv_last
-      
-      ### upper constraint
-      if (!is.infinite(upper_constraint)) {
-        ### find positions
-        pos_upper <- which(adv_ratio > upper_constraint)
-        ### turn of constraint when index below Itrigger?
-        if (isFALSE(cap_below_b)) {
-          pos_upper <- setdiff(pos_upper, 
-                               which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
-        }
-        ### limit advice
-        if (length(pos_upper) > 0) {
-          advice[pos_upper] <- adv_last[,,,,, pos_upper] * upper_constraint
-        }
-        ### lower constraint
+      ### limit advice
+      if (length(pos_upper) > 0) {
+        advice[pos_upper] <- adv_last[,,,,, pos_upper] * upper_constraint
       }
-      if (lower_constraint != 0) {
-        ### find positions
-        pos_lower <- which(adv_ratio < lower_constraint)
-        ### turn of constraint when index below Itrigger?
-        if (isFALSE(cap_below_b)) {
-          pos_lower <- setdiff(pos_lower, 
-                               which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
-        }
-        ### limit advice
-        if (length(pos_lower) > 0) {
-          advice[pos_lower] <- adv_last[,,,,, pos_lower] * lower_constraint
-        }
+      ### lower constraint
+    }
+    if (lower_constraint != 0) {
+      ### find positions
+      pos_lower <- which(adv_ratio < lower_constraint)
+      ### turn of constraint when index below Itrigger?
+      if (isFALSE(cap_below_b)) {
+        pos_lower <- setdiff(pos_lower, 
+                             which(c(tracking[[1]][, ac(ay)]["comp_b", ]) < 1))
+      }
+      ### limit advice
+      if (length(pos_lower) > 0) {
+        advice[pos_lower] <- adv_last[,,,,, pos_lower] * lower_constraint
       }
     }
-    
-    ### absolute catch limit?
-    if (isTRUE(catch_limit > 0)) {
-      advice <- pmin(advice, c(tracking[[1]]["catch_limit", ac(ay)]))
-    }
-    
-  ### otherwise do nothing here and recycle last year's advice
-  } else {
-    
-    advice <- tracking[[1]]["isys", ac(ay)]
-    
   }
   
+  ### absolute catch limit?
+  if (isTRUE(catch_limit > 0)) {
+    advice <- pmin(advice, c(tracking[[1]]["catch_limit", ac(ay)]))
+  }
+  
+
   ### update advice values in control object
-  ctrl@iters[, "value", ] <- advice
+  ctrl@iters[, "value", ] <- rep(c(advice), each = frq)
   
   return(list(ctrl = ctrl, tracking = tracking))
   
@@ -836,9 +817,11 @@ iem_comps <- function(ctrl, args, tracking,
   if (isTRUE(use_dev)) {
     
     ### get advice
-    advice <- ctrl@iters[, "value", ]
+    advice <- c(ctrl@iters[, "value", ])
+    ### get years
+    advice_yrs <- ctrl@target$year
     ### get deviation
-    dev <- c(iem_dev[, ac(ay)])
+    dev <- c(iem_dev[, ac(advice_yrs)])
     ### implement deviation
     advice <- advice * dev
     ### insert into ctrl object
@@ -858,6 +841,15 @@ fwd_attr <- function(om, ### includes stock, recruitment model
                      ctrl,
                      maxF = 5, ### maximum allowed Fbar
                      ...) {
+  
+  ### remove years from ctrl if not included in OM
+  if (any(ctrl@target$year > dims(om@stock)$maxyear)) {
+    
+    yrs_remove <- setdiff(ctrl@target$year, dimnames(om@stock)$year)
+    ctrl <- ctrl[-which(ctrl@target$year %in% yrs_remove)]
+    
+  }
+  
   
   ### project forward with FLasher::fwd
   om@stock[] <- fwd(object = om@stock, control = ctrl, sr = om@sr, 

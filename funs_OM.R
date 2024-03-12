@@ -540,9 +540,15 @@ input_mp <- function(stocks,
     }
     
     ### args
-    args <- list(fy = dims(stk)$maxyear, ### final simulation year
-                 y0 = dims(stk)$minyear, ### first data year
-                 iy = 100, ### first simulation (intermediate) year
+    fy <- dims(stk)$maxyear ### final simulation year
+    y0 <- dims(stk)$minyear ### first data year
+    iy <- 100 ### first simulation (intermediate) year
+    frq <- interval ### advice frequency
+    ### extend fy to force mp() to run until fy if frq > 1
+    # if (frq > 1) {
+    #   fy <- fy + ((fy - iy) %% frq)
+    # }
+    args <- list(fy = fy, y0 = y0, iy = iy, frq = frq,
                  nsqy = 3, ### not used, but has to provided
                  nblocks = n_blocks, ### block for parallel processing
                  seed = 1, ### random number seed before starting MSE
