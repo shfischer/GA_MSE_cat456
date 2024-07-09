@@ -95,7 +95,7 @@ if (exists("OM")) {
   if (isTRUE(OM)) {
     
     stks_hist <- foreach(stock = stocks_subset, .errorhandling = "pass", 
-                         .packages = c("FLCore", "FLash", "FLBRP")) %dopar% {
+                         .packages = c("FLCore", "FLasher", "FLBRP")) %dopar% {
       stk <- as(brps[[stock]], "FLStock")
       refpts <- refpts(brps[[stock]])
       stk <- qapply(stk, function(x) {#browser()
