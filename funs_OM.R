@@ -67,7 +67,7 @@ input_mp <- function(stocks,
   if (is.numeric(stocks)) stocks <- stocks_lh$stock[stocks]
   
   ### go through list of stocks ####
-  input_list <- lapply(stocks, function(stock) {  
+  input_list <- lapply(stocks, function(stock) {#browser()
     
     lhist <- stocks_lh[stocks_lh$stock == stock, ]
     ### get reference points
@@ -346,19 +346,21 @@ input_mp <- function(stocks,
     
     ### harvest rate (chr) ####
     if (identical(MP, "hr")) {
-      ### load some reference harvest rates 
-      hr_refs <- readRDS("input/catch_rates.rds")[stock]
       ### define target harvest rate(s)
       if (identical(hr_value, "uniform")) {
         set.seed(33)
         hr_val <- runif(n = n_iter, min = 0, max = 1)
       } else if (identical(hr_value, "Fmsy")) {
+        ### load some reference harvest rates 
+        hr_refs <- readRDS("input/catch_rates.rds")[stock]
         hr_val <- switch(idx_sel, 
                          "tsb" = hr_refs[[stock]]$Fmsy$tsb,
                          "ssb" = hr_refs[[stock]]$Fmsy$ssb,
                          "survey" = hr_refs[[stock]]$Fmsy$idx,
                          hr_refs[[stock]]$Fmsy$tsb)
       } else if (identical(hr_value, "LFeM")) {
+        ### load some reference harvest rates 
+        hr_refs <- readRDS("input/catch_rates.rds")[stock]
         hr_val <- switch(idx_sel, 
                          "tsb" = hr_refs[[stock]]$LFeM$tsb,
                          "ssb" = hr_refs[[stock]]$LFeM$ssb,
