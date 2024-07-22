@@ -2,9 +2,12 @@
 if (FALSE) {
   
   ### example: one MSE run with chr rule
-  req_pckgs <- c("mse", "tidyr", "dplyr", "doParallel", "GA", "doRNG")
-  for (i in req_pckgs) 
-    suppressPackageStartupMessages(library(package = i, character.only = TRUE))
+  library(mse)
+  library(tidyr)
+  library(dplyr)
+  library(doParallel)
+  library(GA)
+  library(doRNG)
   source("funs.R")
   source("funs_GA.R")
   source("funs_OM.R")
