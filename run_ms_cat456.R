@@ -122,8 +122,6 @@ if (length(args) > 0) {
 
 ### load packages
 ### GA fork from GitHub remotes::install_github("shfischer/GA")
-### use mse fork from shfischer/mse, branch mseDL2.0 
-### remotes::install_github("shfischer/mse", ref = "mseDL2.0)
 req_pckgs <- c("mse", "tidyr", "dplyr", "doParallel", "GA", "doRNG")
 for (i in req_pckgs) 
   suppressPackageStartupMessages(library(package = i, character.only = TRUE))
