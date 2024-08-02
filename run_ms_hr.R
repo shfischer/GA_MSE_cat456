@@ -389,7 +389,7 @@ if (isFALSE(ga_search)) {
     ### ga() samples uniform real (double) values from lower ga_lower to 
     ### ga_upper and these are then rounded to the significant digits
     ### -> adjust ga_lower/upper so that minima/maxima have same probability
-    ga_step  <-   c(1, 1, 0.1, 0.1, 1, 0,01, 0.01)
+    ga_step  <-   c(1, 1, 0.1, 0.01, 1, 0.01, 0.01, 0.01)
     ga_lower <- ga_lower - (ga_step/2 - .Machine$double.eps)
     ga_upper <- ga_upper + (ga_step/2 - .Machine$double.eps)
 
