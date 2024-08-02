@@ -215,9 +215,9 @@ est_comps <- function(stk, idx, tracking, args,
                       comp_i = FALSE, comp_c = FALSE, comp_A = TRUE,
                       comp_m = FALSE, comp_hr = FALSE,
                       idxB_lag = 1, idxB_range_1 = 2, idxB_range_2 = 3,
-                      idxB_range_3 = 1,
+                      idxB_range_3 = 1, comp_b_multiplier = 1.4,
                       catch_lag = 1, catch_range = 1,
-                      Lref, I_trigger, Lref_mult = 1,
+                      Lref, I_loss, Lref_mult = 1,
                       idxL_lag = 1, idxL_range = 1,
                       pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
                       pa_buffer_conditional = FALSE,
@@ -249,7 +249,9 @@ est_comps <- function(stk, idx, tracking, args,
   ### component b: biomass safeguard
   if (isTRUE(comp_b)) {
     b_res <- est_b(idx = index(idx$idxB), ay = ay,
-                   I_trigger = I_trigger, idxB_lag = idxB_lag, 
+                   I_loss = I_loss, 
+                   comp_b_multiplier = comp_b_multiplier,
+                   idxB_lag = idxB_lag, 
                    idxB_range_3 = idxB_range_3)
   } else {
     b_res <- 1
@@ -367,8 +369,12 @@ est_f <- function(idx, ay,
 
 ### biomass index trend
 est_b <- function(idx, ay, 
-                  I_trigger, idxB_lag, idxB_range_3,
+                  I_loss, comp_b_multiplier, 
+                  idxB_lag, idxB_range_3,
                   ...) {
+  
+  ### define I_trigger
+  I_trigger <- I_loss * comp_b_multiplier
   
   ### if fewer iterations provided expand
   if (isTRUE(length(I_trigger) < dims(idx)$iter)) {

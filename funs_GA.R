@@ -160,9 +160,7 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         ### biomass safeguard
         x$ctrl$phcr@args$exp_b <- params[3]
         ### change Itrigger? (default: Itrigger=1.4*Iloss)
-        if (isFALSE(params[4] == 1.4)) {
-          x$ctrl$est@args$I_trigger <- x$ctrl$est@args$I_trigger/1.4*params[4]
-        }
+        x$ctrl$est@args$comp_b_multiplier <- params[4]
         ### multiplier
         x$ctrl$est@args$comp_m <- params[6]
         ### catch interval (default: 1)
@@ -495,10 +493,10 @@ mp_postFitness <- function(x, path, check_file, MP, summarise_runs = FALSE,
       pop$idxB_lag <- round(pop$idxB_lag)
       pop$idxB_range_3 <- round(pop$idxB_range_3)
       pop$interval <- round(pop$interval)
-      ### exp_b, comp_b_multiplier
+      ### exp_b
       pop$exp_b <- round(pop$exp_b, 1)
-      pop$comp_b_multiplier <- round(pop$comp_b_multiplier, 1)
-      ### multiplier, upper_constraint, lower_constraint
+      ### comp_b_multiplier, multiplier, upper_constraint, lower_constraint
+      pop$comp_b_multiplier <- round(pop$comp_b_multiplier, 2)
       pop$multiplier <- round(pop$multiplier, 2)
       pop$upper_constraint <- round(pop$upper_constraint, 2)
       pop$lower_constraint <- round(pop$lower_constraint, 2)

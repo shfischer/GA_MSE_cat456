@@ -317,9 +317,9 @@ input_mp <- function(stocks,
       I_loss <- apply(window(index(oem@observations$idx$idxB) * 
                                      index(oem@deviances$idx$idxB), end = 100),
                       6, min)
-      I_trigger <- I_loss * comp_b_multiplier
+      I_loss * comp_b_multiplier
     } else {
-      I_loss <- I_trigger <- NA
+      I_loss <- NA
     }
     
     ### catch deviation ####
@@ -401,7 +401,8 @@ input_mp <- function(stocks,
                                   comp_m = multiplier,
                                   pa_buffer = FALSE, 
                                   comp_i = TRUE, 
-                                  I_trigger = I_trigger,
+                                  I_loss = I_loss,
+                                  comp_b_multiplier = 1.4,
                                   idxB_lag = idxB_lag,
                                   idxB_range_3 = idxB_range_3,
                                   comp_hr = hr_val
@@ -433,7 +434,8 @@ input_mp <- function(stocks,
                                   idxB_range_1 = 2, idxB_range_2 = 3,
                                   catch_lag = 1, catch_range = 1,
                                   Lref = Lref, 
-                                  I_trigger = I_trigger,
+                                  I_loss = I_loss,
+                                  comp_b_multiplier = 1.4,
                                   idxL_lag = 1, idxL_range = 1
                       )),
         phcr = mseCtrl(method = phcr_comps,
