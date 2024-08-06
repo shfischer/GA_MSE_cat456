@@ -22,6 +22,7 @@ input_mp <- function(stocks,
                      ### Catch implementation uncertainty
                      sigmaIEM = 0,
                      ### recruitment variability
+                     rec_bias_correction = FALSE,
                      sigmaR = 0.6,
                      sigmaR_rho = 0,
                      ### recruitment steepness
@@ -82,18 +83,29 @@ input_mp <- function(stocks,
     
     ### adapt recruitment variability if needed #####
     if (isTRUE(!identical(sigmaR, 0.6) | !identical(sigmaR_rho, 0))) {
+      ### bias correction
+      if (isTRUE(rec_bias_correction)) {
+        m <- 1
+        cv <- sigmaR
+        v <- (cv*m)^2 ### variance
+        mu <- log(m^2/sqrt(m^2+v))
+        sigma <- sqrt(log(v/m^2+1))
+      } else {
+        sigma <- sigmaR
+        mu <- 0
+      }
       ### create recruitment residuals for projection period
       set.seed(0)
-      residuals(sr) <- rlnoise(n_iter, rec(stk) %=% 0, 
-                               sd = sigmaR, b = sigmaR_rho)
+      residuals(sr) <- rlnoise(n_iter, rec(stk) %=% mu, 
+                               sd = sigma, b = sigmaR_rho)
       ### replicate residuals from GA paper
       set.seed(0)
-      residuals(sr)[, ac(0:150)] <- rlnoise(n_iter, rec(stk)[, ac(0:150)] %=% 0,
-                                            sd = sigmaR, b = sigmaR_rho)
+      residuals(sr)[, ac(0:150)] <- rlnoise(n_iter, rec(stk)[, ac(0:150)] %=% mu,
+                                            sd = sigma, b = sigmaR_rho)
       ### replicate residuals from catch rule paper for historical period
       set.seed(0)
-      residuals(sr)[, ac(1:100)] <- rlnoise(n_iter, (rec(stk) %=% 0)[, ac(1:100)], 
-                                            sd = sigmaR, b = sigmaR_rho)
+      residuals(sr)[, ac(1:100)] <- rlnoise(n_iter, (rec(stk) %=% mu)[, ac(1:100)], 
+                                            sd = sigma, b = sigmaR_rho)
     }
     
     ### cut off history

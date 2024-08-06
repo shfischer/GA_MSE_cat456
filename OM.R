@@ -54,6 +54,11 @@ if (isTRUE(n_workers > 1)) {
 
 set.seed(2)
 
+### recruitment bias correction
+### -> ensure that reference points from FLBRP match OM dynamics
+### -> adjust recruitment residuals
+rec_bias_correction <- FALSE
+
 ### ------------------------------------------------------------------------ ###
 ### with uniform distribution and random F trajectories ####
 ### ------------------------------------------------------------------------ ###
@@ -107,17 +112,28 @@ if (exists("OM")) {
       stk_sr <- FLSR(params = params(brps[[stock]]), model = model(brps[[stock]]))
       ### create residuals for (historical) projection
       set.seed(0)
-      residuals(stk_sr) <- rlnoise(dim(stk)[6], rec(stk) %=% 0, 
-                                   sd = 0.6, b = 0)
+      ### recruitment bias correction
+      if (isTRUE(rec_bias_correction)) {
+        m <- 1
+        cv <- 0.6
+        v <- (cv*m)^2 ### variance
+        mu <- log(m^2/sqrt(m^2+v))
+        sigma <- sqrt(log(v/m^2+1))
+      } else {
+        sigma <- 0.6
+        mu <- 0
+      }
+      residuals(stk_sr) <- rlnoise(dim(stk)[6], rec(stk) %=% mu, 
+                                   sd = sigma, b = 0)
       ### replicate residuals from GA paper
       set.seed(0)
       residuals(stk_sr)[, ac(0:150)] <- rlnoise(dim(stk)[6], 
-                                                rec(stk)[, ac(0:150)] %=% 0,
-                                                sd = 0.6, b = 0)
+                                                rec(stk)[, ac(0:150)] %=% mu,
+                                                sd = sigma, b = 0)
       ### replicate residuals from catch rule paper for historical period
       set.seed(0)
-      residuals <- rlnoise(dim(stk)[6], (rec(stk) %=% 0)[, ac(1:100)], 
-                           sd = 0.6, b = 0)
+      residuals <- rlnoise(dim(stk)[6], (rec(stk) %=% mu)[, ac(1:100)], 
+                           sd = sigma, b = 0)
       residuals(stk_sr)[, ac(1:100)] <- residuals[, ac(1:100)]
       
       ### fishing history from previous paper
