@@ -570,7 +570,8 @@ input_mp <- function(stocks,
                   args = args,
                   scenario = scenario, 
                   tracking = tracking, 
-                  verbose = TRUE)
+                  verbose = TRUE,
+                  parallel = n_blocks)
     attr(input, "refpts") <- refpts
     attr(input, "Blim") <- Blim
     
