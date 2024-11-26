@@ -29,7 +29,7 @@ if (length(args) > 0) {
   
   ### projection details
   if (!exists("n_iter")) n_iter <- 500
-  if (!exists("n_yrs")) n_yrs <- 50
+  if (!exists("n_yrs")) n_yrs <- 100
   if (!exists("fhist")) fhist <- "one-way"
   
   ### MP parameters
@@ -53,8 +53,8 @@ if (length(args) > 0) {
   ### MP - CL
   if (identical(MP, "CL")) {
     if (!exists("interval")) interval <- 3
-    if (!exists("lambda_upper")) lambda_upper <- 0.1
     if (!exists("lambda_lower")) lambda_lower <- 0.2
+    if (!exists("lambda_upper")) lambda_upper <- 0.1
     if (!exists("gamma_lower")) gamma_lower <- 0.2
     if (!exists("gamma_upper")) gamma_upper <- 0.1
     if (!exists("r_threshold")) r_threshold <- 0.05
@@ -74,7 +74,7 @@ if (length(args) > 0) {
   if (!exists("sigmaL_rho")) sigmaL_rho <- 0
   if (!exists("sigmaC")) sigmaC <- 0.1
   ### implementation error
-  if (!exists("sigmaIEM")) sigmaIEM <- 0.1
+  if (!exists("sigmaIEM")) sigmaIEM <- 0
   ### recruitment variability
   if (!exists("sigmaR")) sigmaR <- 0.6
   if (!exists("sigmaR_rho")) sigmaR_rho <- 0.0
