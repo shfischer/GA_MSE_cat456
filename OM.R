@@ -2,6 +2,17 @@
 ### create OMs ####
 ### ------------------------------------------------------------------------ ###
 
+### some default parameters
+n_workers <- 1
+fhist <- "one-way"
+stock_id <- 12 # pollack
+OM <- TRUE
+n_iter <- 500
+yrs_hist <- 100
+yrs_proj <- 100
+
+
+
 args <- commandArgs(TRUE)
 if (exists(x = "args_local")) args <- append(args, args_local)
 print("arguments passed on to this script:")
@@ -57,7 +68,7 @@ set.seed(2)
 ### recruitment bias correction
 ### -> ensure that reference points from FLBRP match OM dynamics
 ### -> adjust recruitment residuals
-rec_bias_correction <- FALSE
+rec_bias_correction <- TRUE
 
 ### ------------------------------------------------------------------------ ###
 ### with uniform distribution and random F trajectories ####
@@ -90,7 +101,8 @@ if (identical(fhist, "random")) {
 stocks <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
 
 ### BRPs from Fischer et al. (2020)
-brps <- readRDS("input/brps.rds")
+### -> use updated version
+brps <- readRDS("input/brps_new.rds")
 
 ### create FLStocks
 stocks_subset <- stocks$stock[stock_id]#"bll"
@@ -109,31 +121,35 @@ if (exists("OM")) {
       stk <- stf(stk, yrs_hist + yrs_proj - dims(stk)$year + 1)
       stk <- propagate(stk, n_iter)
       ### create stock recruitment model
-      stk_sr <- FLSR(params = params(brps[[stock]]), model = model(brps[[stock]]))
+      stk_sr <- FLSR(params = params(brps[[stock]]), 
+                     model = model(brps[[stock]]))
       ### create residuals for (historical) projection
-      set.seed(0)
+      
       ### recruitment bias correction
       if (isTRUE(rec_bias_correction)) {
-        m <- 1
-        cv <- 0.6
-        v <- (cv*m)^2 ### variance
-        mu <- log(m^2/sqrt(m^2+v))
-        sigma <- sqrt(log(v/m^2+1))
+        # m <- 1
+        # cv <- 0.6
+        # v <- (cv*m)^2 ### variance
+        # mu <- log(m^2/sqrt(m^2+v))
+        # sR <- sqrt(log(v/m^2+1))
+        sR <- 0.6
+        mu <- 0 - (sR^2)/2
       } else {
-        sigma <- 0.6
+        sR <- 0.6
         mu <- 0
       }
+      set.seed(0)
       residuals(stk_sr) <- rlnoise(dim(stk)[6], rec(stk) %=% mu, 
-                                   sd = sigma, b = 0)
+                                   sd = sR, b = 0)
       ### replicate residuals from GA paper
       set.seed(0)
       residuals(stk_sr)[, ac(0:150)] <- rlnoise(dim(stk)[6], 
                                                 rec(stk)[, ac(0:150)] %=% mu,
-                                                sd = sigma, b = 0)
+                                                sd = sR, b = 0)
       ### replicate residuals from catch rule paper for historical period
       set.seed(0)
       residuals <- rlnoise(dim(stk)[6], (rec(stk) %=% mu)[, ac(1:100)], 
-                           sd = sigma, b = 0)
+                           sd = sR, b = 0)
       residuals(stk_sr)[, ac(1:100)] <- residuals[, ac(1:100)]
       
       ### fishing history from previous paper
