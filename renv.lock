@@ -1336,9 +1336,9 @@
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "mse",
-      "RemoteUsername": "flr",
-      "RemoteRef": "56d6ad8c6f8ee0c83f6e2dfb19ec2f3517006748",
-      "RemoteSha": "56d6ad8c6f8ee0c83f6e2dfb19ec2f3517006748",
+      "RemoteUsername": "shfischer",
+      "RemoteRef": "fbea3bc9351a9efd831baa6be11104e0e26bb569",
+      "RemoteSha": "fbea3bc9351a9efd831baa6be11104e0e26bb569",
       "Requirements": [
         "FLBRP",
         "FLCore",
