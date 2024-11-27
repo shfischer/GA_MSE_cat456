@@ -257,7 +257,8 @@ if (isFALSE(ga_search)) {
     if (identical(MP, "CL")) 
       pars_MP <- c(par_i$interval, par_i$lambda_upper, par_i$lambda_lower, 
                    par_i$gamma_lower, par_i$gamma_upper, par_i$r_threshold, 
-                   par_i$l_threshold, par_i$Lref_mult)
+                   par_i$l_threshold, par_i$Lref_mult, par_i$multiplier, 
+                   par_i$first_catch, par_i$catch_limit)
     file_out <- paste0(c(pars_OM, "", pars_MP), collapse = "_")
     path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/", scenario, "/",
                        fhist, "/", paste0(names(input_i), collapse = "_"), "/")
