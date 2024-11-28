@@ -4,6 +4,8 @@
 mp_fitness <- function(params, inp_file, path, check_file = FALSE,
                        summarise_runs = FALSE,
                        MP, 
+                       ga_names,
+                       ga_rounding = Inf,
                        return_res = FALSE,
                        collapse_correction = TRUE,
                        obj_SSB = FALSE, obj_C = FALSE, obj_F = FALSE,
@@ -23,39 +25,12 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     . <- foreach(i = 1:getDoParWorkers()) %dopar% {invisible(gc())}
   
   ### rounding of arguments
-  if (identical(MP, "rfb")) {
-    params[1:4] <- round(params[1:4])
-    params[5:7] <- round(params[5:7], 1)
-    params[8] <- round(params[8])
-    params[9] <- round(params[9], 2)
-    params[10:11] <- round(params[10:11], 2)
-    ### fix NaN for upper_constraint
-    if (is.nan(params[10])) params[10] <- Inf
-  } else if (identical(MP, "hr")) {
-    ### idxB_lag, idxB_range_3, interval [years]
-    params[c(1, 2, 5)] <- round(params[c(1, 2, 5)])
-    ### exp_b, comp_b_multiplier
-    params[c(3, 4)] <- round(params[c(3, 4)], 1)
-    ### multiplier, upper_constraint, lower_constraint
-    params[c(6, 7, 8)] <- round(params[c(6, 7, 8)], 2)
-    ### fix NaN for upper_constraint
-    if (is.nan(params[7])) params[7] <- Inf
-  } else if (identical(MP, "CC_f")) {
-    params[1] <- round(params[1], 2) ### Lref_mult
-    params[2] <- round(params[2], 2) ### pa_size
-    params[3] <- round(params[3]) ### interval
-    params[4] <- round(params[4]) ### multiplier
-    params[c(5, 6)] <- round(params[c(5, 6)], 2) ### upper/lower constr
-    ### fix NaN for upper_constraint
-    if (is.nan(params[5])) params[5] <- Inf
-  } else if (identical(MP, "CL")) {
-    params[1] <- round(params[1], 0) ### interval
-    params[c(2, 3)] <- round(params[c(2, 3)], 2) ### lambda lower/upper
-    params[c(4, 5)] <- round(params[c(4, 5)], 2) ### lambda lower/upper
-    params[c(6, 7)] <- round(params[c(6, 7)], 2) ### r/l treshold
-    params[8] <- round(params[8], 2) ### Lref_mult
-    params[9] <- round(params[9], 2) ### multiplier
-    params[10:11] <- round(params[10:11], 2) ### catch limits
+  names(params) <- ga_names
+  params <- round(params, ga_rounding)
+  ### fix NaN for upper_constraint
+  if (isTRUE("upper_constraint" %in% ga_names)) {
+    if (is.nan(params[names(params) == "upper_constraint"]))
+      params[names(params) == "upper_constraint"] <- Inf
   }
   
   ### check for files?
@@ -326,7 +301,8 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
     obj <- obj + sum(unlist(Catch_rel))
     ### penalise risk above 5% - gradual
     obj <- obj - sum(penalty(x = unlist(risk_Blim), 
-                             negative = FALSE, max = 1, inflection = 0.06, 
+                             negative = FALSE, max = 1, 
+                             inflection = risk_threshold + 0.01, 
                              steepness = 0.5e+3))
   }
   ### MSY target but replace risk with PA objective

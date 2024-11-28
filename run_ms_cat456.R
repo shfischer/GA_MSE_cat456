@@ -32,6 +32,9 @@ if (length(args) > 0) {
   if (!exists("n_yrs")) n_yrs <- 100
   if (!exists("fhist")) fhist <- "one-way"
   
+  ### stock
+  if (!exists("stock_id")) stop("stock_id missing")
+  
   ### MP parameters
   if (!exists("MP")) MP <- "CL"
   ### MP - constant catch
@@ -52,7 +55,7 @@ if (length(args) > 0) {
   
   ### MP - CL
   if (identical(MP, "CL")) {
-    if (!exists("interval")) interval <- 3
+    if (!exists("interval")) interval <- 2
     if (!exists("lambda_lower")) lambda_lower <- 0.2
     if (!exists("lambda_upper")) lambda_upper <- 0.1
     if (!exists("gamma_lower")) gamma_lower <- 0.2
@@ -92,7 +95,6 @@ if (length(args) > 0) {
   if (isTRUE(ga_search)) {
     if (!exists("popSize")) stop("popSize missing")
     if (!exists("maxiter")) stop("maxiter missing")
-    if (!exists("stock_id")) stop("stock_id missing")
     if (!exists("run")) run <- maxiter
     if (!exists("collate")) collate <- FALSE
     ### objective function elements
@@ -104,7 +106,7 @@ if (length(args) > 0) {
     if (!exists("obj_ICES_PA")) obj_ICES_PA <- FALSE
     if (!exists("obj_ICES_PA2")) obj_ICES_PA2 <- TRUE
     if (!exists("obj_ICES_MSYPA")) obj_ICES_MSYPA <- FALSE
-    if (!exists("risk_threshold")) risk_threshold <- 0.05
+    if (!exists("risk_threshold")) risk_threshold <- 0.1
     ### GA
     if (!exists("add_suggestions")) add_suggestions <- FALSE
     if (!exists("stat_yrs")) stat_yrs <- "all"
@@ -332,8 +334,10 @@ if (isFALSE(ga_search)) {
   ### prepare OM ####
   ### ---------------------------------------------------------------------- ###
 
-  if (isTRUE(nrow(hr_params) > 1))
-    stop("GA search only possible for one parameter (set)!")
+  if (isTRUE(nrow(hr_params) > 1)) {
+    warning("Using first row of hr_params for operating model!")
+    hr_params <- hr_params[1,, drop = FALSE]
+  }
   input <- do.call(input_mp, as.list(hr_params))
 
   ### ---------------------------------------------------------------------- ###
@@ -366,9 +370,10 @@ if (isFALSE(ga_search)) {
                   "first_catch",  ### 2 decimal digits; 0.00-1.00, 
                   "catch_limit"   ### 2 decimal digits; 0.00-1.00, 0->no limit
                   )
-    ga_default <- c(3,  0.2,  0.1,  0.2,  0.1, 0.05,  0.1, 1, 1, 1, 0) ### default values
-    ga_lower <-   c(1,    0,    0,    0,    0,    0,    0, 0, 0,   0,   0) ### minima
-    ga_upper <-   c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 2, 2,   1,   1) ### maxima
+    ga_default <-  c(2,  0.2,  0.1,  0.2,  0.1, 0.05,  0.1, 1, 1, 1, 0) ### default values
+    ga_rounding <- c(0,    2,    2,    2,    2,    2,    2, 2, 2, 2, 2)
+    ga_lower <-    c(1,    0,    0,    0,    0,    0,    0, 0, 0,   0,   0) ### minima
+    ga_upper <-    c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 2, 2,   1,   1) ### maxima
     ### ga() samples uniform real (double) values from lower ga_lower to 
     ### ga_upper and these are then rounded to the significant digits
     ### -> adjust ga_lower/upper so that minima/maxima have same probability
@@ -378,85 +383,112 @@ if (isFALSE(ga_search)) {
     ga_upper <- ga_upper + (ga_step/2 - .Machine$double.eps)
     ### add some suggested parameterisations
     ga_suggestions <- rbind(### default
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             ### zero catch
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0, 1, 0), 
                             ### interval
                             c(1, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             c(4, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             c(5, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
                             ### lambda/gamma
-                            c(3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.3, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.05, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.2, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.3, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.05, 0.05, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.3, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.1, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.3, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.05, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.2, 0.2, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.3, 0.1, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.05, 0.05, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.3, 0.05, 0.1, 1, 1, 1, 0), 
                             ### thresholds
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.01, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.10, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.20, 0.1, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.05, 1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.2, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.01, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.10, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.20, 0.1, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.05, 1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.2, 1, 1, 1, 0), 
                             ### multipliers
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.8, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.9, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.1, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.2, 1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.8, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.9, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.1, 1, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.2, 1, 0),
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.8, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 0.9, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.1, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1.2, 1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.8, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 0.9, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.1, 1, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1.2, 1, 0),
                             ### catch limits
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.5, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.4, 0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 1.0), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.8), 
-                            c(3, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.5) 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.5, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 0.4, 0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 1.0), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.8), 
+                            c(2, 0.2, 0.1, 0.2, 0.1, 0.05, 0.1, 1, 1, 1.0, 0.5) 
                             )
   }
   
   ### turn of parameters not requested, i.e. limit to default value
   pos_default <- which(sapply(mget(ga_names, ifnotfound = FALSE), isFALSE))
-  ga_lower[pos_default] <- ga_default[pos_default]
-  ga_upper[pos_default] <- ga_default[pos_default]
+  if (isTRUE(length(pos_default) > 0)) {
+    ga_lower[pos_default] <- ga_default[pos_default]
+    ga_upper[pos_default] <- ga_default[pos_default]
+    ga_suggestions[, pos_default] <- rep(ga_default[pos_default],
+                                         each = nrow(ga_suggestions))
+    ga_suggestions <- unique(ga_suggestions)
+  }
   ### fix parameters?
   pos_fixed <- which(sapply(mget(ga_names, ifnotfound = FALSE), is.numeric))
-  par_fixed <- names(pos_fixed)
-  val_fixed <- as.vector(unlist(mget(ga_names, ifnotfound = FALSE)[pos_fixed]))
-  ga_lower[pos_fixed] <- val_fixed
-  ga_upper[pos_fixed] <- val_fixed
-  ### remove not requested parameters from suggestions
-  ga_suggestions[, pos_default] <- rep(ga_default[pos_default],
-                                       each = nrow(ga_suggestions))
-  ga_suggestions[, pos_fixed] <- rep(val_fixed,
-                                     each = nrow(ga_suggestions))
+  if (isTRUE(length(pos_fixed) > 0)) {
+    par_fixed <- names(pos_fixed)
+    val_fixed <- mget(ga_names, ifnotfound = FALSE)[pos_fixed]
+    ga_suggestions[, pos_fixed] <- NA
+    ga_suggestions <- unique(ga_suggestions)
+    ### parameters fixed to single value
+    par_fixed_single <- names(which(sapply(val_fixed, length) == 1))
+    val_fixed_single <- val_fixed[par_fixed_single]
+    if (isTRUE(length(par_fixed_single) > 0)) {
+      pos_par_fixed_single <- match(par_fixed_single, ga_names)
+      for (pos in seq_along(par_fixed_single)) {
+        ga_suggestions[, pos_par_fixed_single[pos]] <- val_fixed_single[[pos]]
+        ### ensure that fixed parameters are not changed in GA
+        ga_lower[pos_par_fixed_single[pos]] <- val_fixed_single[[pos]]
+        ga_upper[pos_par_fixed_single[pos]] <- val_fixed_single[[pos]]
+      }
+      ga_suggestions <- unique(ga_suggestions)
+    }
+    ### parameters fixed to multiple values
+    ### -> get all combinations and run all
+    par_fixed_multiple <- names(which(sapply(val_fixed, length) > 1))
+    if (isTRUE(length(par_fixed_multiple) > 0)) {
+      val_fixed_multiple <- val_fixed[par_fixed_multiple]
+      pos_par_fixed_multiple <- match(par_fixed_multiple, ga_names)
+      ga_suggestions[, pos_par_fixed_multiple] <- NA
+      ga_suggestions <- unique(ga_suggestions)
+      ga_suggestions <- lapply(as.list(ga_suggestions), unique)
+      for (pos in seq_along(par_fixed_multiple)) {
+        ga_suggestions[[pos_par_fixed_multiple[pos]]] <-
+          val_fixed[[par_fixed_multiple[pos]]]
+      }
+      ### get all combinations
+      ga_suggestions <- unique(expand.grid(ga_suggestions))
+    }
+  } else {
+    par_fixed_single <- par_fixed_multiple <- NULL
+    val_fixed_single <- val_fixed_multiple <- NULL
+  }
+  ### finalise
   ga_suggestions <- unique(ga_suggestions)
   names(ga_suggestions) <- ga_names
   
-  
-  
-
-  ### multiplier only: run all possible values
-  if (isTRUE(multiplier) &
-      !any(sapply(mget(setdiff(ga_names, "multiplier"), ifnotfound = FALSE),
-                    isTRUE))) {
-    m_vals <- seq(from = ga_lower[6], to = ga_upper[6], by = 0.01)
-    ga_suggestions[1, ] <- ga_lower
-    ga_suggestions <- ga_suggestions[rep(1, length(m_vals)), ]
-    ga_suggestions$multiplier <- m_vals
-    ### adapt GA dimensions
-    maxiter <- run <- 1
-    popSize <- length(m_vals)
-    run_all <- TRUE
-  } else {
-    run_all <- FALSE
+  ### if only one parameter modified & fixed, 
+  ### or parameters fixed to multiple values:
+  ### run all supplied values instead of GA search
+  if (exists("par_fixed")) {
+    if (isTRUE(length(par_fixed_multiple) > 0 ) |
+        (length(pos_default) + length(pos_fixed)) == length(ga_names)) {
+      ### adapt GA dimensions
+      maxiter <- run <- 1
+      popSize <- nrow(ga_suggestions)
+    }
   }
-
-
+  
   ### ---------------------------------------------------------------------- ###
   ### paths ####
   ### ---------------------------------------------------------------------- ###
@@ -465,8 +497,12 @@ if (isFALSE(ga_search)) {
   ### set name depending on which GA parameters are used
   scn_pars <- ga_names[setdiff(seq_along(ga_names), pos_default)]
   ### add fixed parameters
-  scn_pars[which(scn_pars %in% par_fixed)] <- paste0(
-    scn_pars[which(scn_pars %in% par_fixed)], val_fixed)
+  if (isTRUE(length(pos_fixed) > 0)) {
+    if (isTRUE(length(val_fixed_single) > 0)) {
+      scn_pars[which(scn_pars %in% par_fixed_single)] <- paste0(
+        scn_pars[which(scn_pars %in% par_fixed_single)], val_fixed_single)
+    }
+  }
   scn_pars_c <- paste0(scn_pars, collapse = "-")
   path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/",
                      scenario, "/", fhist, "/",
@@ -498,7 +534,7 @@ if (isFALSE(ga_search)) {
   file_ext <- ifelse(stat_yrs == "all", "_res",
                      paste0("_res_", stat_yrs))
   ### suffix if different risk limit used
-  file_ext <- ifelse(isTRUE(!identical(risk_threshold, 0.05) &
+  file_ext <- ifelse(isTRUE(!identical(risk_threshold, 0.1) &
                               isTRUE(obj_ICES_MSYPA)),
                      paste0(file_ext, "_", risk_threshold),
                      file_ext)
@@ -568,7 +604,7 @@ if (isFALSE(ga_search)) {
               path = path_out, check_file = check_file,
               MP = MP,
               suggestions = ga_suggestions, lower = ga_lower, upper = ga_upper,
-              names = ga_names,
+              ga_names = ga_names, ga_rounding = ga_rounding,
               maxiter = maxiter, popSize = popSize, run = run,
               summarise_runs = TRUE,
               postFitness = mp_postFitness,
