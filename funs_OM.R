@@ -61,7 +61,7 @@ input_mp <- function(stocks,
                      ) {
   
   ### load life-history parameters
-  brps <- readRDS("input/brps.rds")
+  brps <- readRDS("input/brps_new.rds")
   stocks_lh <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
   
   ### stock ID
