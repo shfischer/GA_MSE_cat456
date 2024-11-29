@@ -553,9 +553,9 @@ phcr_CL <- function(tracking, args,
   hcrpars["multiplier", ] <- multiplier
   
   ### if threshold is zero, add tiny number to avoid computational issues
-  if (identical(r_threshold, 0)) 
+  if (identical(as.vector(r_threshold), 0)) 
     hcrpars["r_threshold", ] <- r_threshold + .Machine$double.eps
-  if (identical(l_threshold, 0)) 
+  if (identical(as.vector(l_threshold), 0)) 
     hcrpars["l_threshold", ] <- l_threshold + .Machine$double.eps
   
   ### convert hcrpars into FLPar to make "goFish" happy...
@@ -610,12 +610,12 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     ### alpha - trends from catch and length data
     
     ### split into groups:
-    ### -1: value < -0.01
+    ### -1: value < -threshold
     ###  0: -0.01 < value < 0.01
-    ### +1: value > 0.01
+    ### +1: value > threshold
     r_length <- cut(c(hcrpars["r_length"]), 
-                    breaks = c(-Inf, -unique(c(hcrpars["r_threshold"])), 
-                               unique(c(hcrpars["r_threshold"])), Inf), 
+                    breaks = c(-Inf, -unique(c(hcrpars["l_threshold"])), 
+                               unique(c(hcrpars["l_threshold"])), Inf), 
                     labels = c(-1, 0, 1))
     if (any(is.na(r_length))) r_length[is.na(r_length)] <- 0
     r_length <- as.numeric(as.character(r_length))
