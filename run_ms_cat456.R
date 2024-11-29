@@ -61,7 +61,7 @@ if (length(args) > 0) {
     if (!exists("gamma_lower")) gamma_lower <- 0.2
     if (!exists("gamma_upper")) gamma_upper <- 0.1
     if (!exists("r_threshold")) r_threshold <- 0.05
-    if (!exists("l_threshold")) l_threshold <- 0.1
+    if (!exists("l_threshold")) l_threshold <- 0.01
     if (!exists("Lref_mult")) Lref_mult <- 1
     if (!exists("multiplier")) multiplier <- 1
     if (!exists("first_catch")) first_catch <- 0.4 
