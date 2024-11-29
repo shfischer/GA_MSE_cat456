@@ -64,7 +64,7 @@ if (length(args) > 0) {
     if (!exists("l_threshold")) l_threshold <- 0.1
     if (!exists("Lref_mult")) Lref_mult <- 1
     if (!exists("multiplier")) multiplier <- 1
-    if (!exists("first_catch")) first_catch <- 1 # no limit
+    if (!exists("first_catch")) first_catch <- 0.4 
     if (!exists("catch_limit")) catch_limit <- 0 # no limit
   }
   
