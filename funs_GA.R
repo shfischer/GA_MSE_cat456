@@ -177,23 +177,24 @@ mp_fitness <- function(params, inp_file, path, check_file = FALSE,
         x$ctrl$phcr@args$interval <- params[1]
         x$ctrl$hcr@args$interval <- params[1]
         x$ctrl$isys@args$interval <- params[1]
-        x$ctrl$est@args$first_catch  <- params[10]
-        x$ctrl$est@args$catch_limit  <- params[11]
+        x$ctrl$est@args$first_catch  <- params[11]
+        x$ctrl$est@args$catch_limit  <- params[12]
         ### lambda
         x$ctrl$phcr@args$lambda_lower <- params[2]
         x$ctrl$phcr@args$lambda_upper <- params[3]
         ### gamma
         x$ctrl$phcr@args$gamma_lower <- params[4]
         x$ctrl$phcr@args$gamma_upper <- params[5]
-        ### r/l thresholds
+        ### r/l/f thresholds
         x$ctrl$phcr@args$r_threshold <- params[6]
         x$ctrl$phcr@args$l_threshold <- params[7]
+        x$ctrl$phcr@args$f_threshold <- params[8]
         ### Lref_mult
-        x$ctrl$phcr@args$Lref_mult <- params[8]
+        x$ctrl$phcr@args$Lref_mult <- params[9]
         ### multiplier
-        x$ctrl$phcr@args$multiplier <- params[9]
+        x$ctrl$phcr@args$multiplier <- params[10]
         ### catch limit (absolute relative to past)
-        x$ctrl$isys@args$catch_limit  <- params[11]
+        x$ctrl$isys@args$catch_limit  <- params[12]
         return(x)
       })
     }

@@ -53,7 +53,8 @@ input_mp <- function(stocks,
                      gamma_lower = 0.2, 
                      gamma_upper = 0.2,
                      r_threshold = 0.05, 
-                     l_threshold = 0.1,
+                     l_threshold = 0.01,
+                     f_threshold = 0.1,
                      #Lref_mult = 1, # defined above
                      first_catch = "advice",
                      catch_limit = 0,
@@ -532,11 +533,13 @@ input_mp <- function(stocks,
                                    gamma_upper = gamma_upper,
                                    r_threshold = r_threshold, 
                                    l_threshold = l_threshold,
+                                   f_threshold = f_threshold,
                                    Lref = Lref,
                                    Lref_mult = Lref_mult,
                                    multiplier = multiplier)),
         hcr = mseCtrl(method = hcr_CL,
-                      args = list(interval = interval)),
+                      args = list(interval = interval,
+                                  combine_alpha_beta = FALSE)),
         isys = mseCtrl(method = is_comps,
                        args = list(interval = interval,
                                    catch_limit = catch_limit))
@@ -549,10 +552,8 @@ input_mp <- function(stocks,
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
     } else if (isTRUE(MP %in% c("CL"))) {
-      tracking <- c("r_length", "r_catch", "length_average",
-                    "r_threshold", "l_threshold",
-                    "lambda_upper", "lambda_lower", 
-                    "A_last", "catch_limit")
+      tracking <- c("A_last", "r_length", "r_catch", "length_average",
+                    "catch_limit")
     }
     
     ### args

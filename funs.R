@@ -524,7 +524,7 @@ phcr_CL <- function(tracking, args,
                     multiplier = 1,
                     lambda_upper = 0.1, lambda_lower = 0.2,
                     gamma_lower = 0.2, gamma_upper = 0.1,
-                    r_threshold = 0.05, l_threshold = 0.1,
+                    r_threshold = 0.05, l_threshold = 0.01, f_threshold = 0.1,
                     Lref = NA, Lref_mult = 1,
                     ...) {
   
@@ -532,13 +532,15 @@ phcr_CL <- function(tracking, args,
   
   ### get values from tracking
   hcrpars <- tracking[[1]][c("A_last",
-                        "r_length", "r_catch", "length_average",
-                        "A_last", "A_last", "A_last", "A_last", ### dummy values
-                        "A_last", "A_last", "A_last", "A_last",
-                        "A_last"), ac(ay)]
-  dimnames(hcrpars)$metric[5:13] <- c("lambda_upper", "lambda_lower",
+                             "r_length", "r_catch", "length_average",
+                             ### dummy values
+                             "A_last", "A_last", "A_last", "A_last", 
+                             "A_last", "A_last", "A_last", "A_last",
+                             "A_last", "A_last"), ac(ay)]
+  dimnames(hcrpars)$metric[5:14] <- c("lambda_upper", "lambda_lower",
                                       "gamma_upper", "gamma_lower",
                                       "r_threshold", "l_threshold",
+                                      "f_threshold",
                                       "Lref", "Lref_mult", "multiplier")
 
   ### insert control rule parameters
@@ -548,6 +550,7 @@ phcr_CL <- function(tracking, args,
   hcrpars["gamma_lower", ] <- gamma_lower
   hcrpars["r_threshold", ] <- r_threshold
   hcrpars["l_threshold", ] <- l_threshold
+  hcrpars["f_threshold", ] <- f_threshold
   hcrpars["Lref", ] <- Lref
   hcrpars["Lref_mult", ] <- Lref_mult
   hcrpars["multiplier", ] <- multiplier
@@ -557,6 +560,8 @@ phcr_CL <- function(tracking, args,
     hcrpars["r_threshold", ] <- r_threshold + .Machine$double.eps
   if (identical(as.vector(l_threshold), 0)) 
     hcrpars["l_threshold", ] <- l_threshold + .Machine$double.eps
+  if (identical(as.vector(f_threshold), 0)) 
+    hcrpars["f_threshold", ] <- f_threshold + .Machine$double.eps
   
   ### convert hcrpars into FLPar to make "goFish" happy...
   hcrpars <- FLPar(hcrpars)
@@ -656,8 +661,8 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     ### (relative to reference length)
     length_status <- cut(c(hcrpars["length_average"]/
                              (hcrpars["Lref"]*hcrpars["Lref_mult"])), 
-                         breaks = c(-Inf, 1 - unique(c(hcrpars["l_threshold"])), 
-                                    1 + unique(c(hcrpars["l_threshold"])), Inf), 
+                         breaks = c(-Inf, 1 - unique(c(hcrpars["f_threshold"])), 
+                                    1 + unique(c(hcrpars["f_threshold"])), Inf), 
                          labels = c("negative", "neutral", "positive"))
     
     if (any(is.na(length_status))) 
