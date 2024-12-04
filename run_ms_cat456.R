@@ -366,7 +366,7 @@ if (isFALSE(ga_search)) {
                   "gamma_upper",  ### 2 decimal digits; 0.00-0.50
                   "r_threshold",  ### 2 decimal digits; 0.00-0.50
                   "l_threshold",  ### 2 decimal digits; 0.00-0.50
-                  "f_treshold",   ### 2 decimal digits; 0.00-0.50
+                  "f_threshold",  ### 2 decimal digits; 0.00-0.50
                   "Lref_mult",    ### 2 decimal digits; 0.00-2.00
                   "multiplier",   ### 2 decimal digits; 0.00-2.00
                   "first_catch",  ### 2 decimal digits; 0.00-1.00, 
