@@ -372,7 +372,7 @@ if (isFALSE(ga_search)) {
                   "first_catch",  ### 2 decimal digits; 0.00-1.00, 
                   "catch_limit"   ### 2 decimal digits; 0.00-1.00, 0->no limit
                   )
-    ga_default <-  c(2,  0.2,  0.1,  0.2,  0.1, 0.05,  0.01, 0.1, 1, 1, 1, 0) ### default values
+    ga_default <-  c(2,  0.2,  0.1,  0.2,  0.1, 0.05,  0.01, 0.1, 1, 1, 0.4, 0) ### default values
     ga_rounding <- c(0,    2,    2,    2,    2,    2,    2, 2, 2, 2, 2, 2)
     ga_lower <-    c(1,    0,    0,    0,    0,    0,    0, 0, 0, 0,   0,   0) ### minima
     ga_upper <-    c(5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 0.5, 2, 2,   1,   1) ### maxima
