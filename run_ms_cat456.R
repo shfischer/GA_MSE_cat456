@@ -557,11 +557,13 @@ if (isFALSE(ga_search)) {
     avail <- avail[which(sapply(avail, length) < length(scn_pars))]
     ### if some parameters fixed, remove suggestions without them
     if (isTRUE(length(avail) > 0)) {
-      avail <- avail[which(sapply(avail, function(x)
-        all(paste0(par_fixed, val_fixed) %in% x)))]
+      # temporily commented - fix later...
+      # avail <- avail[which(sapply(avail, function(x)
+      #   all(paste0(par_fixed, val_fixed) %in% x)))]
       ### skip parameters not used
       if (isTRUE(length(avail) > 0)) {
-        avail <- avail[which(sapply(avail, function(x) all(x %in% scn_pars)))]
+        # temporily commented - fix later...
+        # avail <- avail[which(sapply(avail, function(x) all(x %in% scn_pars)))]
         if (isTRUE(length(avail) > 0)) {
           ### load results
           res_add <- lapply(avail, function(x) {
@@ -572,17 +574,14 @@ if (isFALSE(ga_search)) {
                             paste0("_", stat_yrs)),
                      ".rds"))
             tmp <- tmp@solution[1, ]
-            if (is.na(tmp[which("upper_constraint" == names(tmp))])) {
-              tmp[which("upper_constraint" == names(tmp))] <- Inf
-            }
+            # temporily commented - fix later...
+            # if (is.na(tmp[which("upper_constraint" == names(tmp))])) {
+            #   tmp[which("upper_constraint" == names(tmp))] <- Inf
+            # }
             return(tmp)
           })
           res_add <- do.call(rbind, res_add)
-          if (isTRUE(nrow(res_add) > 1)) {
-            res_add <- data.frame(res_add, stringsAsFactors = FALSE)
-          } else {
-            res_add <- data.frame(res_add, stringsAsFactors = FALSE)
-          }
+          res_add <- data.frame(res_add, stringsAsFactors = FALSE)
           cat("adding GA suggestions:\n")
           print(res_add)
           ### add to GA suggestions
