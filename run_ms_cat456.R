@@ -580,12 +580,12 @@ if (isFALSE(ga_search)) {
             # }
             return(tmp)
           })
-          res_add <- do.call(rbind, res_add)
+          res_add <- bind_rows(res_add)
           res_add <- data.frame(res_add, stringsAsFactors = FALSE)
           cat("adding GA suggestions:\n")
           print(res_add)
           ### add to GA suggestions
-          ga_suggestions <- rbind(ga_suggestions, res_add)
+          ga_suggestions <- bind_rows(ga_suggestions, res_add)
           ga_suggestions <- unique(ga_suggestions)
         }
       }
