@@ -482,6 +482,7 @@ if (isFALSE(ga_search)) {
   }
   ### finalise
   ga_suggestions <- unique(ga_suggestions)
+  ga_suggestions <- as.data.frame(ga_suggestions)
   names(ga_suggestions) <- ga_names
   
   ### if only one parameter modified & fixed, 
@@ -585,8 +586,9 @@ if (isFALSE(ga_search)) {
           cat("adding GA suggestions:\n")
           print(res_add)
           ### add to GA suggestions
-          ga_suggestions <- bind_rows(ga_suggestions, res_add)
+          ga_suggestions <- rbind(as.matrix(ga_suggestions), as.matrix(res_add))
           ga_suggestions <- unique(ga_suggestions)
+          ga_suggestions <- as.data.frame(ga_suggestions)
         }
       }
     }
