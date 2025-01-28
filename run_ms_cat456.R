@@ -22,11 +22,7 @@ if (length(args) > 0) {
   if (!exists("use_MPI")) use_MPI <- FALSE
   if (!exists("n_blocks")) n_blocks <- 1
   if (!exists("n_workers")) n_workers <- 0
-  
-  ### split OM into blocks?
-  if (!exists("n_parts")) n_parts <- 1
-  if (!exists("part")) part <- 1
-  
+
   ### projection details
   if (!exists("n_iter")) n_iter <- 500
   if (!exists("n_yrs")) n_yrs <- 100
@@ -257,11 +253,14 @@ if (isFALSE(ga_search)) {
     ### generate file name
     pars_OM <- c(par_i$sigmaL, par_i$sigmaL_rho, par_i$sigmaC, par_i$sigmaR, 
                  par_i$sigmaR_rho, par_i$steepness, par_i$sigmaIEM)
-    if (identical(MP, "CL")) 
-      pars_MP <- c(par_i$interval, par_i$lambda_upper, par_i$lambda_lower, 
+    if (identical(MP, "CL")) {
+      pars_MP <- c(par_i$interval, par_i$lambda_lower, par_i$lambda_upper, 
                    par_i$gamma_lower, par_i$gamma_upper, par_i$r_threshold, 
                    par_i$l_threshold, par_i$f_threshold, par_i$Lref_mult, 
                    par_i$multiplier, par_i$first_catch, par_i$catch_limit)
+    } else {
+      pars_MP <- vector()
+    }
     file_out <- paste0(c(pars_OM, "", pars_MP), collapse = "_")
     path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/", scenario, "/",
                        fhist, "/", paste0(names(input_i), collapse = "_"), "/")
