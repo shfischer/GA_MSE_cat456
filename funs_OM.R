@@ -7,7 +7,7 @@ input_mp <- function(stocks,
                      fhist, ### fishing history, e.g. "one-way"
                      n_iter = 500, ### number of iterations
                      n_yrs = 50, ### number of years for MP
-                     MP, ### e.g. "hr", "const_catch", "CC_f"
+                     MP, ### e.g. "hr", "constant_catch", "CC_f"
                      hist_yr_min = 50, ### first year
                      scenario = "",
                      idx_sel = ifelse(isTRUE(MP %in% c("hr")), "tsb", "standard"), ### index selectivity
@@ -175,7 +175,7 @@ input_mp <- function(stocks,
                                PA_status = FALSE, PA_status_dev = FALSE,
                                PA_Bmsy = c(refpts(brps[[stock]])["msy", "ssb"]), 
                                PA_Fmsy = c(refpts(brps[[stock]])["msy", "harvest"])))
-    } else if (identical(MP, "const_catch")) {
+    } else if (identical(MP, "constant_catch")) {
       oem <- FLoem(method = obs_generic,
                    observations = list(stk = stk, idx = idx), 
                    deviances = list(stk = FLQuant(), idx = idx),
@@ -283,7 +283,7 @@ input_mp <- function(stocks,
     ### index deviations ####
     
     ### PA buffer deviations ####
-    if (isTRUE(MP %in% c("const_catch", "CC_f"))) {
+    if (isTRUE(MP %in% c("constant_catch", "CC_f"))) {
       PA_status_dev <- FLQuant(NA, dimnames = list(age = c("positive", "negative"), 
                                                    year = dimnames(stk)$year, 
                                                    iter = dimnames(stk)$iter))
@@ -462,8 +462,8 @@ input_mp <- function(stocks,
                                    cap_below_b = cap_below_b))
       ))
       
-    } else if (identical(MP, "const_catch")) {
-      ### const_catch ####
+    } else if (identical(MP, "constant_catch")) {
+      ### constant_catch ####
       ### set up MP ctrl object
       ctrl <- ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
@@ -548,7 +548,7 @@ input_mp <- function(stocks,
     }
     
     ### tracking ####
-    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "const_catch", "CC_f"))) {
+    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "constant_catch", "CC_f"))) {
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
     } else if (isTRUE(MP %in% c("CL"))) {
