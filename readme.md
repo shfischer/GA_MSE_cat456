@@ -12,11 +12,12 @@ branch displayed as default branch.
 
 This repository contains the code for an exploration of the ICES
 approach for categories 4-6. It includes the typical ICES harvest
-control rule (constant catch with PA buffer) and a version with a
-conditional PA buffer based on length data (including optimisation with
-a genetic algorithm). The simulation is based on the Fisheries Library
-in R ([FLR](http://www.flr-project.org/)) and the Assessment for All
-(a4a) standard MSE framework ([`FLR/mse`](github.com/FLR/mse)) developed
+control rule (constant catch with PA buffer) and a new harvest control
+rule that infers the stock trend from trends in catch and mean catch
+length time series (including optimisation with a genetic algorithm).
+The simulation is based on the Fisheries Library in R
+([FLR](http://www.flr-project.org/)) and the Assessment for All (a4a)
+standard MSE framework ([`FLR/mse`](github.com/FLR/mse)) developed
 during the Workshop on development of MSE algorithms with R/FLR/a4a
 ([Jardim et al.,
 2017](https://ec.europa.eu/jrc/en/publication/assessment-all-initiativea4a-workshop-development-mse-algorithms-rflra4a)).
@@ -40,11 +41,15 @@ described in:
 > life-history traits. ICES Journal of Marine Science, 77: 1914-1926.
 > <https://doi.org/10.1093/icesjms/fsaa054>.
 
+but the operating models were updated
+([`OM_lh.R`](https://github.com/shfischer/GA_MSE_cat456/blob/cat456/OM_lh.R)).
+
 ## Repository structure
 
 The root folder contains the following R scripts:
 
-- `OM.R`: This script creates the operating models (OMs),
+- `OM_lh.R`: This script creates the (updated) operating models (OMs)
+- `OM.R`: prepares the OMs for the MSE
 - `funs_OM.R` contains functions and methods used for the creation of
   the operating models
 - `funs.R` contains functions for running the MSE such as the OM and MP
@@ -53,7 +58,8 @@ The root folder contains the following R scripts:
 - `run_ms_cat456.R` is an R script for running MSE projections and is
   called from a job submission script
 - `run*.pbs` are job submission scripts which are used on a high
-  performance computing cluster and call `run_ms.R`
+  performance computing cluster and call `run_ms_cat456.R`
+- \`run_ms_hr.R\`\` legacy script for running the chr rule
 - `analysis_cat456.R` is for analysing the results
 
 The following input files are provided:
@@ -61,11 +67,8 @@ The following input files are provided:
 - `input/stocks.csv` contains the stock definitions and life-history
   parameters
 - `input/brps.rds` contains the FLBRP objects which are the basis for
-  the OMs
-
-Summarised outputs are provided in:
-
-- `output/`
+  the OMs (old, not used anymore)
+- `input/brps_new.rds` updated FLBRP objects created in `OM_lh.R`
 
 ## R, R packages and version info
 
@@ -109,13 +112,10 @@ The FLR package versions can also be installed manually with `remotes`
 (requires suitable tools to compile R packages):
 
 ``` r
-remotes::install_github(repo = "flr/FLCore", ref = "9ba6652000574cbaea278ad4b0428b6fb98b4607")
-remotes::install_github(repo = "flr/FLasher", ref = "84268b3bc21941bfde20dc9cbb0cfc3367f570a7", INSTALL_opts = "--no-multiarch")
-# INSTALL_opts = "--no-multiarch" to avoid issues in Windows
-remotes::install_github(repo = "flr/FLBRP", ref = "a76a06a5cf6afbf3cadefe3ed8ce7617a8dfd57c", INSTALL_opts = "--no-multiarch")
-remotes::install_github(repo = "shfischer/mse", ref = "9daf60000fb3a0b7343ff602d0bb479d609f0fe2", INSTALL_opts = "--no-multiarch")
-# and the GA package for running the genetic algorithm
-remotes::install_github(repo = "shfischer/GA", ref = "48c1092437629b86a5310fa2873621621ff0b0e0")
+remotes::install_github(repo = "flr/FLCore", ref = "5dac55024c83fc6ee198d780d9cd810819c574a1")
+remotes::install_github(repo = "flr/FLasher", ref = "84268b3bc21941bfde20dc9cbb0cfc3367f570a7")
+remotes::install_github(repo = "flr/FLBRP", ref = "9fad7869462eb71456cd9e50a46e788a3b46f7f4")
+remotes::install_github(repo = "shfischer/mse", ref = "fbea3bc9351a9efd831baa6be11104e0e26bb569")
 ```
 
 For using MPI parallelisation, an MPI backend such as OpenMPI and the R
