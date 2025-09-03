@@ -52,6 +52,9 @@ if (length(args) > 0) {
   ### MP - CL
   if (identical(MP, "CL")) {
     if (!exists("interval")) interval <- 2
+    if (!exists("n_catch")) n_catch <- 3
+    if (!exists("n_length_1")) n_length_1 <- 3
+    if (!exists("n_length_2")) n_length_2 <- 3
     if (!exists("lambda_lower")) lambda_lower <- 0.2
     if (!exists("lambda_upper")) lambda_upper <- 0.1
     if (!exists("gamma_lower")) gamma_lower <- 0.2
@@ -66,7 +69,7 @@ if (length(args) > 0) {
   }
   
   if (!exists("stat_yrs")) stat_yrs <- "all"
-  if (!exists("scenario")) scenario <- "baseline"
+  if (!exists("scenario")) scenario <- "default"
   
   ### OM specifications
   ### observation uncertainty
@@ -214,7 +217,8 @@ hr_params <- c(
   "sigmaL", "sigmaL_rho", "sigmaC", "sigmaR", "sigmaR_rho", "steepness",
   "sigmaIEM",
   ### MP parameters
-  "multiplier", "interval", "pa_buffer", "pa_size", "pa_duration",
+  "multiplier", "interval", "n_catch", "n_length_1", "n_length_2",
+  "pa_buffer", "pa_size", "pa_duration",
   "upper_constraint", "lower_constraint",
   "lambda_upper", "lambda_lower", "gamma_lower", "gamma_upper", "r_threshold",
   "l_threshold", "f_threshold", "Lref_mult", "first_catch", "catch_limit"
@@ -254,7 +258,9 @@ if (isFALSE(ga_search)) {
     pars_OM <- c(par_i$sigmaL, par_i$sigmaL_rho, par_i$sigmaC, par_i$sigmaR, 
                  par_i$sigmaR_rho, par_i$steepness, par_i$sigmaIEM)
     if (identical(MP, "CL")) {
-      pars_MP <- c(par_i$interval, par_i$lambda_lower, par_i$lambda_upper, 
+      pars_MP <- c(par_i$interval, 
+                   par_i$n_catch, par_i$n_length_1, par_i$n_length_2,
+                   par_i$lambda_lower, par_i$lambda_upper, 
                    par_i$gamma_lower, par_i$gamma_upper, par_i$r_threshold, 
                    par_i$l_threshold, par_i$f_threshold, par_i$Lref_mult, 
                    par_i$multiplier, par_i$first_catch, par_i$catch_limit)
