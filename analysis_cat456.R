@@ -1528,3 +1528,4 @@ ggsave(filename = "output/plots/CL/comparison_10k_risk_zoom.png",
        type = "cairo",
        width = 16, height = 10, units = "cm", dpi = 600)
 
+
