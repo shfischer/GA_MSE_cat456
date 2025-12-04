@@ -296,7 +296,7 @@ p
 
 ggsave(filename = "output/plots/constant_catch/10k_depletion.png",
        type = "cairo-png", plot = p,
-       width = 16, height = 7, units = "cm", dpi = 600)
+       width = 16, height = 4.5, units = "cm", dpi = 600)
 
 ### ------------------------------------------------------------------------ ###
 ### constant_catch - plot time series example ####
@@ -619,6 +619,118 @@ df_plot_qnts %>%
 ggsave(filename = "output/plots/CL/pol_timeseries.png",
        type = "cairo", 
        width = 17, height = 8, units = "cm", dpi = 600)
+
+### ------------------------------------------------------------------------ ###
+### CL - risk vs depletion ####
+### ------------------------------------------------------------------------ ###
+### random fhist, 10,000 iterations, 100 years
+### examples: pollack, turbot, herring, anglerfish
+
+res_df <- foreach(stk = c("pol", "tur", "ang3", "her"), 
+                  .combine = bind_rows) %do% {
+  #browser()
+  
+  ### reference points
+  Blim <- attr(brps[[stk]], "Blim")
+  Bmsy <- brps[[stk]]@refpts["msy", "ssb"]
+  MSY <- brps[[stk]]@refpts["msy", "yield"]
+  
+  ### MP output
+  res <- readRDS(paste0("output/CL/10000_100/baseline/random/",
+                        stk, "/mp_0.1_0_0.1_0.6_0_0.75_0_",
+                        "_2_0.1_0.2_0.2_0.1_0.05_0.01_0.1_1_1_0.4_0.rds"))
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+  
+  ### starting condition
+  SSBs0 <- ssb(res@om@stock)[, ac(100)]
+  SSBs0 <- SSBs0/c(Bmsy)
+  SSBs0 <- c(SSBs0)
+  max_SSB <- max(SSBs0) #3
+  SSB_breaks <- seq(from = 0, to = max_SSB, by = 0.1)
+  SSB_groups <- cut(SSBs0, breaks = SSB_breaks)
+  SSB_levels <- unique(as.character(SSB_groups))
+  ### number of replicates per group
+  group_n <- sapply(SSB_levels, function(x) {
+    length(which(SSB_groups %in% x))
+  })
+  group_n[sort(names(group_n))]
+  # sum(group_n)
+  ### Blim risk per group
+  ### SSB is on absolute scale 
+  risk_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[,,,,, which(SSB_groups %in% x)]
+    mean(tmp < Blim)
+  })
+  ### SSB (long-term median) per group
+  SSB_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[,,,,, which(SSB_groups %in% x)]/c(Bmsy)
+    median(tmp)
+  })
+  ### Catch (long-term median) per group
+  Catch_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$catch[,,,,, which(SSB_groups %in% x)]/c(MSY)
+    median(tmp)
+  })
+  ### get starting conditions
+  SSB_levels <- sapply(SSB_levels, function(x) {
+    x <- gsub(x = x, pattern = "\\(|\\]", replacement = "")
+    x <- unlist(strsplit(x, split = ","))
+    mean(as.numeric(x))
+  })
+  pos_remove <- which(is.na(SSB_levels))
+  stats_risk_depletion <- data.frame(
+    risk_Blim = unlist(risk_group)[-pos_remove],
+    SSB_rel = unlist(SSB_group)[-pos_remove],
+    Catch_rel = unlist(Catch_group)[-pos_remove],
+    SSB0_rel = unlist(SSB_levels)[-pos_remove],
+    n_iter_part = unlist(group_n)[-pos_remove])
+  row.names(stats_risk_depletion) <- NULL
+  stats_risk_depletion <- stats_risk_depletion[order(stats_risk_depletion$SSB0_rel), ]
+  stats_risk_depletion <- stats_risk_depletion %>%
+    mutate(stock = stk)
+  
+  return(stats_risk_depletion)
+  
+}
+
+df_plot <- res_df %>%
+  pivot_longer(c(risk_Blim, SSB_rel, Catch_rel)) %>%
+  mutate(name = factor(name, levels = c("SSB_rel", "risk_Blim", "Catch_rel"),
+                       labels = c("SSB/B[MSY]", "B[lim]~risk", "Catch/MSY"))) %>%
+  # left_join(stocks %>%
+  #             select(stock, k)) %>%
+  mutate(stock_name = factor(stock,
+                             levels = c("ang3", "pol", "tur", "her"),
+                             labels = c("anglerfish", "pollack",
+                                        "turbot", "herring")))
+
+
+p <- df_plot %>%
+  ggplot(aes(x = SSB0_rel, y = value, 
+             colour = stock_name, fill = stock_name, linetype = stock_name)) +
+  stat_smooth(n = 100, span = 0.25, se = FALSE, geom = "line", linewidth = 0.4) +
+  geom_point(size = 0.15, stroke = 0, shape = 21) +
+  scale_colour_brewer("", palette = "Set1") +
+  scale_fill_brewer("", palette = "Set1") +
+  scale_linetype("") +
+  facet_wrap(~ name, scales = "free_y", labeller = "label_parsed",
+             strip.position = "left") +
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, NA)) +
+  labs(x = expression(SSB[y == 0]/B[MSY])) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        axis.title.y = element_blank(),
+        legend.key.height = unit(0.6, "lines")
+  )
+p
+
+ggsave(filename = "output/plots/CL/10k_depletion.png",
+       type = "cairo-png", plot = p,
+       width = 16, height = 4.5, units = "cm", dpi = 600)
+
 
 ### ------------------------------------------------------------------------ ###
 ### CL - example GA optimisation ####
@@ -1060,4 +1172,359 @@ ggsave(filename = "output/plots/CL/CL_pol_1par_stats.png",
 # runs[pos]
 # 
 # 
+
+
+### ------------------------------------------------------------------------ ###
+### old (CC) vs new (CL) - compare risk for all stocks  ####
+### ------------------------------------------------------------------------ ###
+
+stats_risk <- foreach(stock = stocks$stock, k = stocks$k, 
+                      .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
+  foreach(hcr = c("constant_catch", "CL"), .combine = bind_rows) %do% {
+    #browser()
+    res <- readRDS(paste0(
+      "output/", hcr, "/500_100/", 
+      switch(hcr, 
+             constant_catch = "baseline",
+             CL = "default"),
+      "/", fhist,"/", stock, "/",
+      switch(hcr, 
+             constant_catch = "mp_0.1_0_0.1_0.6_0_0.75_0_",
+             CL = "mp_0.1_0_0.1_0.6_0_0.75_0__2_0.1_0.2_0.2_0.1_0.05_0.01_0.1_1_1_0.4_0"),
+      ".rds"))
+    
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+    
+    ### get fishing history
+    stk <- readRDS(paste0("input/500_100/OM/", fhist, "/", stock, "/stk.rds"))
+    qnts <- FLQuants(ssb = ssb(stk), catch = catch(stk), 
+                     risk = ssb(stk) %=% NA_real_)
+    ### add simulated values
+    qnts$ssb[, ac(101:200)] <- res_corrected$ssb
+    qnts$catch[, ac(101:200)] <- res_corrected$catch
+    
+    ### risk
+    qnts$risk <- apply(qnts$ssb < attr(brps[[stock]], "Blim"), 2, mean)
+    
+    ### median for SSB and catch
+    qnts$ssb <- iterMedians(qnts$ssb)
+    qnts$catch <- iterMedians(qnts$catch)
+
+    ### combine data into data.frame
+    df_tmp <- as.data.frame(qnts)[, c("year", "data", "qname")]
+    df_tmp$fhist <- fhist
+    df_tmp$stock <- stock
+    df_tmp$k <- k
+    df_tmp$hcr <- hcr
+    return(df_tmp)
+}
+
+stats_risk %>%
+  filter(qname == "risk") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, 1.05), expand = FALSE) +
+  labs(x = "Year", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison_risk_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+stats_risk %>%
+  filter(qname == "ssb") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, NA), expand = FALSE) +
+  labs(x = "Year", y = "SSB") +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison_SSB_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+stats_risk %>%
+  filter(qname == "catch") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, 300), expand = FALSE) +
+  labs(x = "Year", y = "Catch") +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison_catch_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+
+
+
+### change in risk between HCRs
+p <- stats_risk %>%
+  filter(qname == "risk") %>%
+  pivot_wider(names_from = hcr, values_from = data) %>%
+  mutate(risk_change = (CL/constant_catch - 1)*100) %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random"))) %>%
+  ggplot(aes(x = year - 100, y = risk_change, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid( ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(-100, 100), expand = FALSE) +
+  labs(x = "Year", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8)
+p
+ggsave(filename = "output/plots/CL/comparison_risk_all_comparison.png",
+       type = "cairo",
+       width = 12, height = 5, units = "cm", dpi = 600)
+p + coord_cartesian(xlim = c(-4, 21), ylim = c(-100, 100), expand = FALSE)
+ggsave(filename = "output/plots/CL/comparison_risk_all_comparison_zoom.png",
+       type = "cairo",
+       width = 12, height = 5, units = "cm", dpi = 600)
+
+
+### ------------------------------------------------------------------------ ###
+### old (CC) vs new (CL) - compare risk for all stocks - 5-year trends  ####
+### ------------------------------------------------------------------------ ###
+
+stats_risk5 <- foreach(stock = stocks$stock, k = stocks$k, 
+                      .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
+  foreach(hcr = c("constant_catch", "CL"), .combine = bind_rows) %do% {
+    #browser()
+    res <- readRDS(paste0(
+      "output/", hcr, "/500_100/", 
+      switch(hcr, 
+             constant_catch = "baseline",
+             CL = "default"),
+      "/", fhist,"/", stock, "/",
+      switch(hcr, 
+             constant_catch = "mp_0.1_0_0.1_0.6_0_0.75_0_",
+             CL = "mp_0.1_0_0.1_0.6_0_0.75_0__2_5_5_3_0.2_0.1_0.2_0.1_0.05_0.01_0.1_1_1_0.4_0"),
+      ".rds"))
+    
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+    
+    ### get fishing history
+    stk <- readRDS(paste0("input/500_100/OM/", fhist, "/", stock, "/stk.rds"))
+    qnts <- FLQuants(ssb = ssb(stk), catch = catch(stk), 
+                     risk = ssb(stk) %=% NA_real_)
+    ### add simulated values
+    qnts$ssb[, ac(101:200)] <- res_corrected$ssb
+    qnts$catch[, ac(101:200)] <- res_corrected$catch
+    
+    ### risk
+    qnts$risk <- apply(qnts$ssb < attr(brps[[stock]], "Blim"), 2, mean)
+    
+    ### median for SSB and catch
+    qnts$ssb <- iterMedians(qnts$ssb)
+    qnts$catch <- iterMedians(qnts$catch)
+    
+    ### combine data into data.frame
+    df_tmp <- as.data.frame(qnts)[, c("year", "data", "qname")]
+    df_tmp$fhist <- fhist
+    df_tmp$stock <- stock
+    df_tmp$k <- k
+    df_tmp$hcr <- hcr
+    return(df_tmp)
+}
+
+stats_risk5 %>%
+  filter(qname == "risk") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, 1.05), expand = FALSE) +
+  labs(x = "Year", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison5_risk_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+stats_risk5 %>%
+  filter(qname == "ssb") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, NA), expand = FALSE) +
+  labs(x = "Year", y = "SSB") +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison5_SSB_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+stats_risk5 %>%
+  filter(qname == "catch") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("old", "new"))) %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(hcr ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, 300), expand = FALSE) +
+  labs(x = "Year", y = "Catch") +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/CL/comparison5_catch_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+
+
+
+### change in risk between HCRs
+p <- stats_risk5 %>%
+  filter(qname == "risk") %>%
+  pivot_wider(names_from = hcr, values_from = data) %>%
+  mutate(risk_change = (CL/constant_catch - 1)*100) %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random"))) %>%
+  ggplot(aes(x = year - 100, y = risk_change, group = stock, colour = k)) +
+  geom_line() +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid( ~ fhist) +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(-100, 100), expand = FALSE) +
+  labs(x = "Year", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8)
+p
+ggsave(filename = "output/plots/CL/comparison5_risk_all_comparison.png",
+       type = "cairo",
+       width = 12, height = 5, units = "cm", dpi = 600)
+p + coord_cartesian(xlim = c(-4, 21), ylim = c(-100, 100), expand = FALSE)
+ggsave(filename = "output/plots/CL/comparison5_risk_all_comparison_zoom.png",
+       type = "cairo",
+       width = 12, height = 5, units = "cm", dpi = 600)
+### ------------------------------------------------------------------------ ###
+### old (CC) vs new (CL) - pollack - compare recovery vs. depletion  ####
+### ------------------------------------------------------------------------ ###
+
+res_df <- foreach(stk = c("pol", "tur", "ang3", "her"), 
+                  .combine = bind_rows) %:%
+  foreach(hcr = c("constant_catch", "CL"), .combine = bind_rows)  %do% {
+  #browser()
+  
+  ### reference points
+  Blim <- attr(brps[[stk]], "Blim")
+  Bmsy <- brps[[stk]]@refpts["msy", "ssb"]
+  MSY <- brps[[stk]]@refpts["msy", "yield"]
+  
+  ### MP output
+  res <- readRDS(paste0(
+    "output/", hcr, "/10000_100/", 
+    switch(hcr, 
+           constant_catch = "baseline",
+           CL = "baseline"),
+    "/random/", stk, "/",
+    switch(hcr, 
+           constant_catch = "mp_0.1_0_0.1_0.6_0_0.75_0_",
+           CL = "mp_0.1_0_0.1_0.6_0_0.75_0__2_0.1_0.2_0.2_0.1_0.05_0.01_0.1_1_1_0.4_0"),
+    ".rds"))
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+  
+  ### starting condition
+  SSBs0 <- ssb(res@om@stock)[, ac(100)]
+  SSBs0 <- SSBs0/c(Bmsy)
+  SSBs0 <- c(SSBs0)
+  max_SSB <- max(SSBs0) #3
+  SSB_breaks <- seq(from = 0, to = max_SSB, by = 0.25)
+  SSB_groups <- cut(SSBs0, breaks = SSB_breaks)
+  SSB_levels <- sort(unique(as.character(SSB_groups)))
+  ### number of replicates per group
+  group_n <- sapply(SSB_levels, function(x) {
+    length(which(SSB_groups %in% x))
+  })
+  group_n
+  # sum(group_n)
+  ### Blim risk per group
+  ### SSB is on absolute scale 
+  df <- foreach(x = SSB_levels, .combine = bind_rows) %do% {
+    tmp_ssb <- res_corrected$ssb[,,,,, which(SSB_groups %in% x)]
+    tmp_catch <- res_corrected$catch[,,,,, which(SSB_groups %in% x)]
+    
+    df_tmp <- as.data.frame(iterMeans(tmp_ssb < Blim)) %>%
+      select(year, risk = data)
+    df_tmp$SSB <- c(iterMedians(tmp_ssb/c(Bmsy)))
+    df_tmp$Catch <- c(iterMedians(tmp_catch/c(MSY)))
+    df_tmp$depletion <- x
+    return(df_tmp)
+  }
+  df$hcr <- hcr
+  df$stk <- stk
+  return(df)
+}
+
+p <- res_df %>%
+  mutate(depletion = factor(depletion)) %>%
+  mutate(hcr = factor(hcr, levels = c("constant_catch", "CL"),
+                      labels = c("current approach", "new"))) %>%
+  mutate(stk = factor(stk, levels = c("ang3", "pol", "tur", "her"))) %>%
+  #filter(stk == "pol") %>%
+  filter(depletion %in% c("(0,0.25]", "(0.25,0.5]", "(0.5,0.75]", "(0.75,1]")) %>%
+  ggplot(aes(x = year - 100, y = risk, linetype = depletion)) +
+  geom_line() +
+  scale_linetype_discrete(name = expression(Initial~depletion~SSB/B[MSY])) +
+  facet_grid(stk ~ hcr) +
+  coord_cartesian(xlim = c(0, 100), ylim = c(-0.025, 1.05), expand = FALSE) + 
+  labs(x = "Year", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"))
+p
+ggsave(filename = "output/plots/CL/comparison_10k_risk.png",
+       type = "cairo",
+       width = 16, height = 10, units = "cm", dpi = 600)
+p + coord_cartesian(xlim = c(0, 26), ylim = c(-0.025, 1.05), expand = FALSE)
+ggsave(filename = "output/plots/CL/comparison_10k_risk_zoom.png",
+       type = "cairo",
+       width = 16, height = 10, units = "cm", dpi = 600)
 
