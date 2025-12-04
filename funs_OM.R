@@ -15,8 +15,10 @@ input_mp <- function(stocks,
                      ### index uncertainty & auto-correlation
                      sigmaB = 0.2,
                      sigmaL = 0.2,
+                     sigmaCC = 0.1,
                      sigmaB_rho = 0,
                      sigmaL_rho = 0,
+                     sigmaCC_rho = 0,
                      ### catch observation uncertainty
                      sigmaC = 0,
                      ### Catch implementation uncertainty
@@ -58,6 +60,7 @@ input_mp <- function(stocks,
                      r_threshold = 0.05, 
                      l_threshold = 0.01,
                      f_threshold = 0.1,
+                     cc_threshold = 0.01,
                      #Lref_mult = 1, # defined above
                      first_catch = "advice",
                      catch_limit = 0,
@@ -135,18 +138,27 @@ input_mp <- function(stocks,
                                     args = list(dupl_trgt = TRUE)))
   
     ### length data ####
-    if (MP %in% c("rfb", "hr", "CC_f", "CL")) {
+    if (MP %in% c("rfb", "hr", "CC_f", "CL", "CL_cc", "fcc")) {
       ### allometric a & b
       ### length at first capture
       pars_l <- FLPar(a = lhist$a,
                       b = lhist$b,
                       Lc = calc_lc(stk = stk[, ac(75:100)], 
-                                   a = lhist$a, b = lhist$b))
+                                   a = lhist$a, b = lhist$b),
+                      Linf = lhist$linf)
       ### mean catch length
       idx_Lmean <- lmean(stk = stk, params = pars_l)
       
       ### calculate reference length FL=M
       Lref <- c(0.75 * pars_l["Lc"] + 0.25 * lhist$linf)
+      
+      ### length catch curve
+      if (isTRUE(MP %in% c("CL_cc", "fcc"))) {
+        idx_cc <- lcc(ay = 100,
+                      idx = idx_Lmean %=% NA_real_,
+                      stk = stk, params = pars_l)
+      }
+      
     }
     
     ### index template ####
@@ -154,6 +166,7 @@ input_mp <- function(stocks,
       sel       = FLIndex(index = stk@mat %=% NA_real_),
       idxB      = FLIndex(index = ssb(stk) %=% NA_real_),
       idxL      = FLIndex(index = ssb(stk) %=% NA_real_),
+      idxCC     = FLIndex(index = ssb(stk) %=% NA_real_),
       PA_status = FLIndex(index = ssb(stk) %=% NA_integer_)
     )
     
@@ -208,6 +221,25 @@ input_mp <- function(stocks,
                    deviances = list(stk = FLQuant(), idx = idx),
                    args = list(idxB = FALSE,
                                lngth = TRUE, lngth_dev = TRUE,
+                               lngth_par = pars_l
+                   ))
+    ### Catch + length data CC
+    } else if (identical(MP, "CL_cc")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idxB = FALSE,
+                               lngth = TRUE, lngth_dev = TRUE,
+                               lngth_cc = TRUE, lngth_cc_dev = TRUE,
+                               lngth_par = pars_l
+                   ))
+    } else if (identical(MP, "fcc")) {
+      oem <- FLoem(method = obs_generic,
+                   observations = list(stk = stk, idx = idx), 
+                   deviances = list(stk = FLQuant(), idx = idx),
+                   args = list(idxB = FALSE,
+                               lngth = TRUE, lngth_dev = TRUE,
+                               lngth_cc = TRUE, lngth_cc_dev = TRUE,
                                lngth_par = pars_l
                    ))
     }
@@ -275,12 +307,16 @@ input_mp <- function(stocks,
 
     ### length index
     ### only include when required for MP
-    if (isTRUE(MP %in% c("CC_f", "CL", "rfb"))) {
+    if (isTRUE(MP %in% c("CC_f", "CL", "CL_cc", "rfb", "fcc"))) {
       oem@args$lngth <- TRUE
       oem@args$lngth_dev <- TRUE
       oem@args$lngth_par <- pars_l
       ### calculate mean length
       index(oem@observations$idx$idxL) <- idx_Lmean
+      ### catch curve
+      if (isTRUE(MP %in% c("CL_cc", "fcc"))) {
+        index(oem@observations$idx$idxCC) <- idx_cc
+      }
     }
   
     ### index deviations ####
@@ -307,10 +343,16 @@ input_mp <- function(stocks,
         rlnoise(n = dims(idx$idxB)$iter, index(idx$idxB) %=% 0, 
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL"))) {
+    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL", "CL_cc", "fcc"))) {
       index(oem@deviances$idx$idxL) <- 
         rlnoise(n = dims(idx$idxL)$iter, index(idx$idxL) %=% 0, 
         sd = sigmaL, b = sigmaL_rho)
+      if (isTRUE(MP %in% c("CL_cc", "fcc"))) {
+        index(oem@deviances$idx$idxCC) <- 
+          rlnoise(n = dims(idx$idxCC)$iter, index(idx$idxCC) %=% 0, 
+                  sd = sigmaCC, b = sigmaCC_rho)
+      }
+      
     }
     ### replicate previous deviates from GA paper
     set.seed(696)
@@ -320,7 +362,7 @@ input_mp <- function(stocks,
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
                 sd = sigmaB, b = sigmaB_rho)
     }
-    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL"))) {
+    if (isTRUE(MP %in% c("hr", "rfb", "CC_f", "CL", "CL_cc", "fcc"))) {
       index(oem@deviances$idx$idxL)[, ac(50:150)] <- 
         rlnoise(n = dims(oem@deviances$idx$idxL)$iter, 
                 window(index(oem@deviances$idx$idxB), end = 150) %=% 0,
@@ -339,7 +381,7 @@ input_mp <- function(stocks,
     }
     
     ### catch deviation ####
-    if (MP %in% c("CL")) {
+    if (MP %in% c("CL", "fcc")) {
       ### deviation on total catch
       set.seed(699)
       oem@deviances$stk <- FLQuants(
@@ -359,6 +401,17 @@ input_mp <- function(stocks,
                              iem_dev = iem_dev))
     
     ### MP control object ####
+    
+    ### absolute catch limit
+    if (isTRUE(MP %in% c("fcc", "CL", "CL_cc"))) {
+      if (isTRUE(catch_limit > 0)) {
+        catch_oem <- catch(oem@observations$stk) * oem@deviances$stk$catch
+        catch_limit_val <- c(apply(window(catch_oem, end = 100), 6, quantile, 
+                                   probs = catch_limit))
+      } else {
+        catch_limit_val <- Inf
+      }
+    }
     
     ### harvest rate (chr) ####
     if (identical(MP, "hr")) {
@@ -408,7 +461,7 @@ input_mp <- function(stocks,
       }
       
       ### set up MP ctrl object
-      ctrl <- ctrl <- mpCtrl(list(
+      ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
                       args = list(comp_r = FALSE, 
                                   comp_f = FALSE, 
@@ -437,7 +490,7 @@ input_mp <- function(stocks,
     } else if (identical(MP, "rfb")) {
       
       ### set up MP ctrl object
-      ctrl <- ctrl <- mpCtrl(list(
+      ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
                       args = list(comp_r = TRUE, 
                                   comp_f = TRUE, 
@@ -468,7 +521,7 @@ input_mp <- function(stocks,
     } else if (identical(MP, "constant_catch")) {
       ### constant_catch ####
       ### set up MP ctrl object
-      ctrl <- ctrl <- mpCtrl(list(
+      ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
                       args = list(comp_r = FALSE, 
                                   comp_f = FALSE, 
@@ -494,7 +547,7 @@ input_mp <- function(stocks,
     } else if (identical(MP, "CC_f")) {
       ### CC_f ####
       ### set up MP ctrl object
-      ctrl <- ctrl <- mpCtrl(list(
+      ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_comps,
                       args = list(comp_r = FALSE, 
                                   comp_f = FALSE, 
@@ -523,14 +576,13 @@ input_mp <- function(stocks,
     } else if (identical(MP, "CL")) {
       ### CL ####
       ### set up MP ctrl object
-      ctrl <- ctrl <- mpCtrl(list(
+      ctrl <- mpCtrl(list(
         est = mseCtrl(method = est_CL,
                       args = list(interval = interval,
                                   n_catch = n_catch, 
                                   n_length_1 = n_length_1, 
                                   n_length_2 = n_length_2,
-                                  first_catch = first_catch,
-                                  catch_limit = catch_limit)),
+                                  first_catch = first_catch)),
         phcr = mseCtrl(method = phcr_CL,
                        args = list(interval = interval,
                                    lambda_upper = lambda_upper,
@@ -548,16 +600,85 @@ input_mp <- function(stocks,
                                   combine_alpha_beta = FALSE)),
         isys = mseCtrl(method = is_comps,
                        args = list(interval = interval,
-                                   catch_limit = catch_limit))
+                                   catch_limit = catch_limit_val))
+      ))
+      
+    } else if (identical(MP, "CL_cc")) {
+      ### CL_cc ####
+      ### set up MP ctrl object
+      ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_CL,
+                      args = list(interval = interval,
+                                  n_catch = n_catch, 
+                                  n_length_1 = n_length_1, 
+                                  n_length_2 = n_length_2,
+                                  r_catch = TRUE, r_length = FALSE, r_cc = TRUE,
+                                  first_catch = first_catch)),
+        phcr = mseCtrl(method = phcr_CL,
+                       args = list(interval = interval,
+                                   lambda_upper = lambda_upper,
+                                   lambda_lower = lambda_lower,
+                                   gamma_lower = gamma_lower, 
+                                   gamma_upper = gamma_upper,
+                                   r_threshold = r_threshold, 
+                                   l_threshold = l_threshold,
+                                   f_threshold = f_threshold,
+                                   Lref = Lref,
+                                   Lref_mult = Lref_mult,
+                                   multiplier = multiplier)),
+        hcr = mseCtrl(method = hcr_CL,
+                      args = list(interval = interval,
+                                  combine_alpha_beta = FALSE,
+                                  multiple = TRUE)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval,
+                                   catch_limit = catch_limit_val))
+      ))
+      
+    } else if (identical(MP, "fcc")) {
+      ### find reference slope from length catch curve
+      ### same principle as for chr rule
+      Lc <- calc_lc(stk = window(stk, end = 100), a = lhist$a, b = lhist$b)
+      LFeM <- (lhist$linf + 2*1.5*c(Lc)) / (1 + 2*1.5)
+      Lmean <- window(index(oem@observations$idx$idxL) * 
+                        index(oem@deviances$idx$idxL),
+                      end = 100)
+      Lstatus <- Lmean/LFeM
+      Lcc <- window(index(oem@observations$idx$idxCC) * 
+                      index(oem@deviances$idx$idxCC),
+                    end = 100)
+      Lcc_use <- Lcc
+      Lcc_use[Lstatus < 1] <- NA
+      Lcc_use <- c(yearMeans(Lcc_use))
+      
+      ### set up MP ctrl object
+      ctrl <- mpCtrl(list(
+        est = mseCtrl(method = est_comps,
+                      args = list(comp_fcc = TRUE, 
+                                  comp_m = multiplier,
+                                  catch_lag = 1, catch_range = 1,
+                                  Lref = Lcc_use, 
+                                  idxL_lag = idxL_lag, idxL_range = idxL_range
+                      )),
+        phcr = mseCtrl(method = phcr_comps,
+                       args = list()),
+        hcr = mseCtrl(method = hcr_comps,
+                      args = list(interval = interval)),
+        isys = mseCtrl(method = is_comps,
+                       args = list(interval = interval, 
+                                   upper_constraint = upper_constraint, 
+                                   lower_constraint = lower_constraint, 
+                                   cap_below_b = TRUE,
+                                   catch_limit = catch_limit_val))
       ))
       
     }
     
     ### tracking ####
-    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "constant_catch", "CC_f"))) {
+    if (isTRUE(MP %in% c("rfb", "hr", "2over3", "constant_catch", "CC_f", "fcc"))) {
       tracking <- c("comp_c", "comp_i", "comp_r", "comp_f", "comp_b",
                     "multiplier", "comp_hr", "exp_r", "exp_f", "exp_b")
-    } else if (isTRUE(MP %in% c("CL"))) {
+    } else if (isTRUE(MP %in% c("CL", "CL_cc"))) {
       tracking <- c("A_last", "r_length", "r_catch", "length_average",
                     "catch_limit")
     }

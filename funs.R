@@ -8,6 +8,8 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
                         idx_dev = FALSE,
                         lngth = FALSE, ### catch length data?
                         lngth_dev = FALSE, 
+                        lngth_cc = FALSE, ### length catch curve?
+                        lngth_cc_dev = FALSE,
                         lngth_par,
                         PA_status = FALSE,
                         PA_status_dev = FALSE,
@@ -15,7 +17,7 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
                         catch_dev = FALSE,
                         ...) {
 
-  #ay <- args$ay
+  ay <- args$ay
   ### update observations
   observations$stk <- stk
   
@@ -47,6 +49,14 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   if (isTRUE(lngth)) {
     index(observations$idx$idxL) <- lmean(stk = stk, params = lngth_par)
   }
+  
+  ### use length catch curves?
+  if (isTRUE(lngth_cc)) {
+    index(observations$idx$idxCC) <- lcc(ay = ay,
+                                         idx = index(observations$idx$idxCC),
+                                         stk = stk, params = lngth_par)
+  }
+  
   ### stock status for PA buffer?
   if (isTRUE(PA_status)) {
     index(observations$idx$PA_status)[] <- 
@@ -79,6 +89,10 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   if (isTRUE(lngth) & isTRUE(lngth_dev)) {
     index(idx0$idxL) <- index(observations$idx$idxL) * index(deviances$idx$idxL)
   }
+  ### uncertainty for length catch curves
+  if (isTRUE(lngth_cc) & isTRUE(lngth_cc_dev)) {
+    index(idx0$idxCC) <- index(observations$idx$idxCC) * index(deviances$idx$idxCC)
+  }
   ### uncertainty for stock status for PA buffer
   if (isTRUE(PA_status) & isTRUE(PA_status_dev)) {
     index(idx0$PA_status) <- ifelse(index(observations$idx$PA_status) == TRUE, 
@@ -98,11 +112,11 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
 ### category 4-6 - catch and length data
 est_CL <- function(stk, idx, tracking, args,
                    n_catch = 3, n_length_1 = 3, n_length_2 = n_length_1,
-                   r_catch = TRUE, r_length = TRUE, length_average = TRUE,
+                   r_catch = TRUE, r_length = TRUE, r_cc = FALSE,
+                   length_average = TRUE,
                    lag_catch = 1, lag_length = 1,
                    interval = 3,
                    first_catch = 1,
-                   catch_limit = 0,
                    ...) {
   
   ay <- args$ay
@@ -136,6 +150,21 @@ est_CL <- function(stk, idx, tracking, args,
                                           length.out = n_length_1))], 
                         6, function(x) {
         tmp_data <- as.data.frame(FLQuant(x))
+        tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
+        out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
+                   silent = TRUE)
+        if (is(out, "try-error")) {
+          return(0) ### return 0, i.e. no trend detected
+        } else {
+          return(out)
+        }
+      })
+    } else if (isTRUE(r_cc)) {
+      r_length <- apply(index(idx$idxCC)[, ac(seq(to = ay - lag_length, 
+                                                 length.out = n_length_1))], 
+                        6, function(x) {
+        tmp_data <- as.data.frame(FLQuant(x))
+        tmp_data$data <- 1 + tmp_data$data ### ~Z
         tmp_data$data <- tmp_data$data/mean(tmp_data$data, na.rm = TRUE)
         out <- try(lm(data ~ year, data = tmp_data)$coefficients[["year"]], 
                    silent = TRUE)
@@ -183,22 +212,7 @@ est_CL <- function(stk, idx, tracking, args,
     r_length <- r_catch <- length_average <- advice_current <- NA
     
   }
-  
-  ### include absolute catch limit?
-  ### x-th percentile of historical catches
-  ### do only once in first simulation year
-  ### catch_limit == 0 means no limit, i.e. set to Inf
-  if (identical(ay, iy)) {
-    if (isTRUE(catch_limit > 0)) {
-      catch_limit <- apply(window(catch(stk), end = 100), 6, quantile, 
-                           probs = catch_limit)
-    } else {
-      catch_limit <- Inf
-    }
-    tracking[[1]]["catch_limit"] <- catch_limit
-  }
 
-  
   ### save results
   tracking[[1]]["r_length", ac(ay)] <- r_length
   tracking[[1]]["r_catch", ac(ay)] <- r_catch
@@ -214,6 +228,7 @@ est_comps <- function(stk, idx, tracking, args,
                       comp_r = FALSE, comp_f = FALSE, comp_b = FALSE,
                       comp_i = FALSE, comp_c = FALSE, comp_A = TRUE,
                       comp_m = FALSE, comp_hr = FALSE,
+                      comp_fcc = FALSE,
                       idxB_lag = 1, idxB_range_1 = 2, idxB_range_2 = 3,
                       idxB_range_3 = 1, comp_b_multiplier = 1.4,
                       catch_lag = 1, catch_range = 1,
@@ -241,6 +256,11 @@ est_comps <- function(stk, idx, tracking, args,
   if (isTRUE(comp_f)) {
     f_res <- est_f(idx = index(idx$idxL), ay = ay,
                    Lref = Lref, idxL_range = idxL_range, idxL_lag = idxL_lag)
+    ### catch curve slope as indicator for Z
+  } else if (isTRUE(comp_fcc)) {
+    f_res <- est_f(idx = index(idx$idxCC), ay = ay,
+                   Lref = Lref, idxL_range = idxL_range, idxL_lag = idxL_lag)
+    f_res <- 1/f_res ### higher value = higher mortality -> invert indicator
   } else {
     f_res <- 1
   }
@@ -321,7 +341,7 @@ est_comps <- function(stk, idx, tracking, args,
     hr_res <- 1
   }
   tracking[[1]]["comp_hr", ac(ay)] <- hr_res
-  
+
   return(list(stk = stk, tracking = tracking))
   
 }
@@ -524,7 +544,8 @@ phcr_CL <- function(tracking, args,
                     multiplier = 1,
                     lambda_upper = 0.1, lambda_lower = 0.2,
                     gamma_lower = 0.2, gamma_upper = 0.1,
-                    r_threshold = 0.05, l_threshold = 0.01, f_threshold = 0.1,
+                    r_threshold = 0.05, l_threshold = 0.01, 
+                    f_threshold = 0.1,
                     Lref = NA, Lref_mult = 1,
                     ...) {
   
@@ -604,6 +625,7 @@ phcr_comps <- function(tracking, args,
 hcr_CL <- function(hcrpars, args, tracking, interval = 2, 
                    alpha = TRUE, beta = TRUE, beta0 = FALSE,
                    combine_alpha_beta = FALSE,
+                   multiple = TRUE, ### multiple indicators?
                    ...) {
   
   ay <- args$ay ### current year
@@ -634,7 +656,9 @@ hcr_CL <- function(hcrpars, args, tracking, interval = 2,
     ### status: combine catch and length trend
     r_status <- r_length + r_catch
     ### additional precaution: set to -1 if signals are conflicting
-    r_status[r_status == 0 & r_length*r_catch == 1] <- -1
+    if (isTRUE(multiple)) {
+      r_status[r_status == 0 & r_length*r_catch == 1] <- -1
+    }
     
     
     ### assign values:
@@ -762,7 +786,7 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
 
 is_comps <- function(ctrl, args, tracking, interval = 2, 
                      upper_constraint = Inf, lower_constraint = 0, 
-                     cap_below_b = TRUE, catch_limit = 0, ...) {
+                     cap_below_b = TRUE, catch_limit = Inf, ...) {
   
   ay <- args$ay ### current year
   iy <- args$iy ### first simulation year
@@ -816,8 +840,8 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
     }
     
     ### absolute catch limit?
-    if (isTRUE(catch_limit > 0)) {
-      advice <- pmin(advice, c(tracking[[1]]["catch_limit", ac(ay)]))
+    if (isTRUE(all(catch_limit > 0)) & all(is.finite(catch_limit))) {
+      advice <- pmin(advice, catch_limit)
     }
     
   ### otherwise do nothing here and recycle last year's advice
@@ -949,6 +973,57 @@ lmean <- function(stk, params) {
     return(res)
   })
   return(lmean)
+}
+
+### ------------------------------------------------------------------------ ###
+### length catch curve ####
+### ------------------------------------------------------------------------ ###
+lcc <- function(ay, idx, stk, params) {
+  
+  ### find new years (years without data, up to ay)
+  yrs_new <- apply(idx, 2, function(x) {
+    as.numeric(all(is.na(c(x)) == TRUE))
+  })
+  yrs_new <- which(yrs_new == 1)
+  yrs_new <- dimnames(idx)$year[yrs_new]
+  yrs_new <- yrs_new[as.numeric(yrs_new) <= ay]
+  
+  ### only do something if new data required
+  if (isTRUE(length(yrs_new) > 0)) {
+  
+    ### calculate length from age with a & b
+    weights <- c(catch.wt(stk)[, 1,,,, 1])
+    lengths <- (weights / c(params["a"]))^(1 / c(params["b"]))
+    
+    catch.n <- catch.n(stk)[, yrs_new]
+    dimnames(catch.n)$age <- lengths
+    
+    ### apply lm to length catch curves
+    idx_new <- apply(catch.n, MARGIN = c(2, 6), function(x) {
+      #browser()
+      ### keep only data at/above mode
+      x_keep <- seq(which.max(x), length(x))
+      ### format data for linear regression
+      tmp <- as.data.frame(x)[x_keep, , drop = FALSE]
+      tmp$lrel <- -log(1-(as.numeric(rownames(tmp)))/c(params$Linf))
+      tmp$logN <- log(tmp$unique.all.unique)
+      ### logN vs relative age (length converted to relative age)
+      out <- try(lm(logN ~ lrel, data = tmp)$coefficients[[2]], 
+                 silent = TRUE)
+      if (is(out, "try-error")) {
+        return(0) ### return 0, i.e. no trend detected
+      } else {
+        return(-out) ### slope is negative -> return positive value
+      }
+  
+    })
+    
+    ### insert new values into index
+    idx[, yrs_new] <- idx_new
+  
+  }
+  
+  return(idx)
 }
 
 ### ------------------------------------------------------------------------ ###

@@ -46,11 +46,8 @@ if (length(args) > 0) {
     if (!exists("idxB_lag")) idxB_lag <- 1
     if (!exists("upper_constraint")) upper_constraint <- Inf
     if (!exists("lower_constraint")) lower_constraint <- 0
-  }
-  ### MP - CC_f
-  
   ### MP - CL
-  if (identical(MP, "CL")) {
+  } else if (identical(MP, "CL")) {
     if (!exists("interval")) interval <- 2
     if (!exists("n_catch")) n_catch <- 3
     if (!exists("n_length_1")) n_length_1 <- 3
@@ -66,7 +63,33 @@ if (length(args) > 0) {
     if (!exists("multiplier")) multiplier <- 1
     if (!exists("first_catch")) first_catch <- 0.4 
     if (!exists("catch_limit")) catch_limit <- 0 # no limit
+    ### MP - CL with catch curves
+  } else if (identical(MP, "CL_cc")) {
+    if (!exists("interval")) interval <- 2
+    if (!exists("n_catch")) n_catch <- 3
+    if (!exists("n_length_1")) n_length_1 <- 3
+    #if (!exists("n_length_2")) n_length_2 <- 3
+    if (!exists("lambda_lower")) lambda_lower <- 0.2
+    if (!exists("lambda_upper")) lambda_upper <- 0.1
+    if (!exists("gamma_lower")) gamma_lower <- 0.2
+    if (!exists("gamma_upper")) gamma_upper <- 0.1
+    if (!exists("r_threshold")) r_threshold <- 0.05
+    if (!exists("l_threshold")) l_threshold <- 0.05
+    if (!exists("f_threshold")) f_threshold <- 0.1
+    if (!exists("Lref_mult")) Lref_mult <- 1
+    if (!exists("multiplier")) multiplier <- 1
+    if (!exists("first_catch")) first_catch <- 0.4 
+    if (!exists("catch_limit")) catch_limit <- 0 # no limit
+    ### MP - fcc with catch curves
+  } else if (identical(MP, "fcc")) {
+    if (!exists("interval")) interval <- 2
+    if (!exists("idxL_range")) idxL_range <- 1
+    if (!exists("multiplier")) multiplier <- 1
+    if (!exists("catch_limit")) catch_limit <- 0.5 
+    if (!exists("upper_constraint")) upper_constraint <- 1.1
+    if (!exists("lower_constraint")) lower_constraint <- 0.7
   }
+  
   
   if (!exists("stat_yrs")) stat_yrs <- "all"
   if (!exists("scenario")) scenario <- "default"
@@ -76,6 +99,8 @@ if (length(args) > 0) {
   if (!exists("sigmaL")) sigmaL <- 0.1
   if (!exists("sigmaL_rho")) sigmaL_rho <- 0
   if (!exists("sigmaC")) sigmaC <- 0.1
+  if (!exists("sigmaCC")) sigmaCC <- 0.1
+  if (!exists("sigmaCC_rho")) sigmaCC_rho <- 0
   ### implementation error
   if (!exists("sigmaIEM")) sigmaIEM <- 0
   ### recruitment variability
@@ -214,14 +239,17 @@ hr_params <- c(
   ### OM
   "stock_id", "fhist", "n_iter", "n_yrs", "MP", "scenario", "n_blocks",
   ### uncertainty
-  "sigmaL", "sigmaL_rho", "sigmaC", "sigmaR", "sigmaR_rho", "steepness",
+  "sigmaL", "sigmaL_rho", "sigmaC", "sigmaCC", "sigmaCC_rho",
+  "sigmaR", "sigmaR_rho", "steepness",
   "sigmaIEM",
   ### MP parameters
   "multiplier", "interval", "n_catch", "n_length_1", "n_length_2",
   "pa_buffer", "pa_size", "pa_duration",
   "upper_constraint", "lower_constraint",
   "lambda_upper", "lambda_lower", "gamma_lower", "gamma_upper", "r_threshold",
-  "l_threshold", "f_threshold", "Lref_mult", "first_catch", "catch_limit"
+  "l_threshold", "f_threshold", 
+  "Lref_mult", "first_catch", "catch_limit",
+  "idxL_range"
 )
 hr_params <- as.data.frame(mget(hr_params, ifnotfound = NA))
 names(hr_params)[1] <- "stocks"
@@ -264,6 +292,10 @@ if (isFALSE(ga_search)) {
                    par_i$gamma_lower, par_i$gamma_upper, par_i$r_threshold, 
                    par_i$l_threshold, par_i$f_threshold, par_i$Lref_mult, 
                    par_i$multiplier, par_i$first_catch, par_i$catch_limit)
+    } else if (identical(MP, "fcc")) {
+      pars_MP <- c(par_i$interval, par_i$multiplier, par_i$idxL_range, 
+                   par_i$catch_limit,
+                   par_i$upper_constraint, par_i$lower_constraint)
     } else {
       pars_MP <- vector()
     }
