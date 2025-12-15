@@ -98,7 +98,13 @@
     "FLife": {
       "Package": "FLife",
       "Version": "3.4.0",
-      "Source": "unknown",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "FLife",
+      "RemoteUsername": "flr",
+      "RemoteRef": "16b34762fe075a44dd225756db34bc0ed69d26fd",
+      "RemoteSha": "16b34762fe075a44dd225756db34bc0ed69d26fd",
       "Requirements": [
         "FLBRP",
         "FLCore",
