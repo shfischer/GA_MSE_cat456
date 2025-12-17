@@ -67,6 +67,17 @@ obs_generic <- function(stk, observations, deviances, args, tracking,
   stk0 <- observations$stk
   idx0 <- observations$idx
   
+  ### observation error - check dimensions
+  if (any(catch_dev, idx_dev, lngth_dev, lngth_cc_dev, PA_status_dev) &
+      isTRUE(length(deviances$idx) > 0)) {
+    dim_stk <- dim(stk)[6]
+    dim_dev <- dim(deviances$idx[[1]])[6]
+    if (isTRUE(dim_dev > dim_stk)) {
+      dim_names <- dimnames(stk)$iter
+      deviances$idx <- FLCore::iter(deviances$idx, dim_names)
+    }
+  }
+  
   ### add deviances to catch?
   if (isTRUE(catch_dev)) {
     ### add uncertainty to total catch
@@ -784,7 +795,7 @@ hcr_comps <- function(hcrpars, args, tracking, interval = 2,
 ### no need to convert, already catch in tonnes
 ### apply TAC constraint, if required
 
-is_comps <- function(ctrl, args, tracking, interval = 2, 
+is_comps <- function(ctrl, args, stk, tracking, interval = 2, 
                      upper_constraint = Inf, lower_constraint = 0, 
                      cap_below_b = TRUE, catch_limit = Inf, ...) {
   
@@ -841,6 +852,11 @@ is_comps <- function(ctrl, args, tracking, interval = 2,
     
     ### absolute catch limit?
     if (isTRUE(all(catch_limit > 0)) & all(is.finite(catch_limit))) {
+      ### check dimensions
+      if (isTRUE(length(catch_limit) > dim(stk)[6])) {
+        dim_names <- dimnames(stk)$iter
+        catch_limit <- catch_limit[as.numeric(dim_names)]
+      }
       advice <- pmin(advice, catch_limit)
     }
     
