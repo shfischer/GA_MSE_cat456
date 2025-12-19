@@ -1528,4 +1528,361 @@ ggsave(filename = "output/plots/CL/comparison_10k_risk_zoom.png",
        type = "cairo",
        width = 16, height = 10, units = "cm", dpi = 600)
 
+### ------------------------------------------------------------------------ ###
+### fcc - all stocks ####
+### ------------------------------------------------------------------------ ###
 
+stats_fcc <- foreach(stock = stocks$stock, k = stocks$k, 
+                      .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows)  %dopar% {
+    #browser()
+    res <- readRDS(paste0(
+      "output/fcc/500_100/default/", fhist,"/", stock, "/",
+      "mp_0.1_0_0.1_0.6_0_0.75_0__2_1_1_0.5_1.1_0.7",
+      ".rds"))
+    
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+    
+    ### get fishing history
+    stk <- readRDS(paste0("input/500_100/OM/", fhist, "/", stock, "/stk.rds"))
+    qnts <- FLQuants(ssb = ssb(stk), catch = catch(stk), 
+                     risk = ssb(stk) %=% NA_real_)
+    ### add simulated values
+    qnts$ssb[, ac(101:200)] <- res_corrected$ssb
+    qnts$catch[, ac(101:200)] <- res_corrected$catch
+    
+    ### risk
+    qnts$risk <- apply(qnts$ssb < attr(brps[[stock]], "Blim"), 2, mean)
+    
+    ### median for SSB and catch
+    qnts$ssb <- iterMedians(qnts$ssb)
+    qnts$catch <- iterMedians(qnts$catch)
+    
+    ### combine data into data.frame
+    df_tmp <- as.data.frame(qnts)[, c("year", "data", "qname")]
+    df_tmp$fhist <- fhist
+    df_tmp$stock <- stock
+    df_tmp$k <- k
+    return(df_tmp)
+}
+
+stats_plot <- stats_fcc %>%
+  filter(year >= 90) %>%
+  #filter(qname == "risk") %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "random")),
+         qname = factor(qname, levels = c("ssb", "catch", "risk"),
+                        labels = c("SSB", "Catch", "B[lim]~risk")))
+stats_plot %>%
+  ggplot(aes(x = year - 100, y = data, group = stock, colour = k)) +
+  geom_line() +
+  geom_blank(data = stats_plot %>% mutate(data = data * 1.05)) +
+  geom_vline(xintercept = 0) +
+  scale_colour_gradientn("k/year", 
+                         colours = scales::brewer_pal(palette = "Blues", 
+                                                      direction = -1)(9),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+  facet_grid(qname ~ fhist, scales = "free_y", switch = "y", 
+             labeller = "label_parsed") +
+  coord_cartesian(xlim = c(-5, 100), ylim = c(0, NA), expand = FALSE) +
+  labs(x = "Year") +
+  theme_bw(base_size = 8) +
+  theme(axis.title.y = element_blank(),
+        strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8))
+ggsave(filename = "output/plots/fcc/comparison_all.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+### plot pollack with iterations
+res_pol <- readRDS("output/fcc/500_100/default/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_1_1_0.5_1.1_0.7.rds")
+plot(stock(res_pol), iter = 1:5)
+ggsave(filename = "output/plots/fcc/pol.png",
+       type = "cairo",
+       width = 20, height = 12, units = "cm", dpi = 600)
+
+### ------------------------------------------------------------------------ ###
+### fcc - pollack - multiplier ####
+### ------------------------------------------------------------------------ ###
+
+res <- foreach(multiplier = seq(0.5, 1.4, 0.1),
+               .combine = bind_rows) %do% {
+  res_i <- readRDS(paste0("output/fcc/500_100/default/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_", multiplier, "_1_0.5_1.1_0.7.rds"))
+  Blim <- attr(brps[["pol"]], "Blim")
+  Bmsy <- c(refpts(brps[["pol"]])["msy", "ssb"])
+  Cmsy <- c(refpts(brps[["pol"]])["msy", "yield"])
+  risk_i <- mean(iterMeans(ssb(stock(om(res_i)))[, ac(101:200)] < Blim))
+  ssb_i <- median(ssb(stock(om(res_i)))[, ac(101:200)]/Bmsy)
+  catch_i <- median(catch(stock(om(res_i)))[, ac(101:200)]/Cmsy)
+  data.frame(multiplier = multiplier, 
+             risk = risk_i,
+             ssb = ssb_i,
+             catch = catch_i)
+}
+
+### ------------------------------------------------------------------------ ###
+### fcc - risk vs depletion ####
+### ------------------------------------------------------------------------ ###
+### random fhist, 10,000 iterations, 100 years
+### examples: pollack, turbot, herring, anglerfish
+
+res_df <- foreach(stk = c("pol", "tur", "her"), ### add ang3 later!!!!!!
+                  .combine = bind_rows) %do% {
+  #browser()
+  
+  ### reference points
+  Blim <- attr(brps[[stk]], "Blim")
+  Bmsy <- brps[[stk]]@refpts["msy", "ssb"]
+  MSY <- brps[[stk]]@refpts["msy", "yield"]
+  
+  ### MP output
+  res <- readRDS(paste0("output/fcc/10000_100/default/random/",
+                        stk, "/mp_0.1_0_0.1_0.6_0_0.75_0_",
+                        "_2_1_1_0.5_1.1_0.7.rds"))
+  ### collapse correction
+  res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+  
+  ### starting condition
+  SSBs0 <- ssb(res@om@stock)[, ac(100)]
+  SSBs0 <- SSBs0/c(Bmsy)
+  SSBs0 <- c(SSBs0)
+  max_SSB <- max(SSBs0) #3
+  SSB_breaks <- seq(from = 0, to = max_SSB, by = 0.1)
+  SSB_groups <- cut(SSBs0, breaks = SSB_breaks)
+  SSB_levels <- unique(as.character(SSB_groups))
+  ### number of replicates per group
+  group_n <- sapply(SSB_levels, function(x) {
+    length(which(SSB_groups %in% x))
+  })
+  group_n[sort(names(group_n))]
+  # sum(group_n)
+  ### Blim risk per group
+  ### SSB is on absolute scale 
+  risk_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[,,,,, which(SSB_groups %in% x)]
+    mean(tmp < Blim)
+  })
+  ### SSB (long-term median) per group
+  SSB_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[,,,,, which(SSB_groups %in% x)]/c(Bmsy)
+    median(tmp)
+  })
+  ### Catch (long-term median) per group
+  Catch_group <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$catch[,,,,, which(SSB_groups %in% x)]/c(MSY)
+    median(tmp)
+  })
+  ### same but for long-term (last 50 years)
+  risk_group_long <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]
+    mean(tmp < Blim)
+  })
+  SSB_group_long <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]/c(Bmsy)
+    median(tmp)
+  })
+  Catch_group_long <- sapply(SSB_levels, function(x) {
+    tmp <- res_corrected$catch[, ac(151:200),,,, which(SSB_groups %in% x)]/c(MSY)
+    median(tmp)
+  })
+  ### get starting conditions
+  SSB_levels <- sapply(SSB_levels, function(x) {
+    x <- gsub(x = x, pattern = "\\(|\\]", replacement = "")
+    x <- unlist(strsplit(x, split = ","))
+    mean(as.numeric(x))
+  })
+  pos_remove <- which(is.na(SSB_levels))
+  stats_risk_depletion <- data.frame(
+    riskBlim_all = unlist(risk_group)[-pos_remove],
+    SSBrel_all = unlist(SSB_group)[-pos_remove],
+    Catchrel_all = unlist(Catch_group)[-pos_remove],
+    riskBlim_long = unlist(risk_group_long)[-pos_remove],
+    SSBrel_long = unlist(SSB_group_long)[-pos_remove],
+    Catchrel_long = unlist(Catch_group_long)[-pos_remove],
+    SSB0_rel = unlist(SSB_levels)[-pos_remove],
+    n_iter_part = unlist(group_n)[-pos_remove])
+  row.names(stats_risk_depletion) <- NULL
+  stats_risk_depletion <- stats_risk_depletion[order(stats_risk_depletion$SSB0_rel), ]
+  stats_risk_depletion <- stats_risk_depletion %>%
+    mutate(stock = stk)
+  
+  return(stats_risk_depletion)
+  
+}
+
+res_df <- res_df %>%
+  pivot_longer(cols = riskBlim_all:Catchrel_long,
+               names_to = c("name", "period"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(name = factor(name, levels = c("SSBrel", "riskBlim", "Catchrel"),
+                       labels = c("SSB/B[MSY]", "B[lim]~risk", "Catch/MSY"))) %>%
+  mutate(stock_name = factor(stock,
+                             levels = c("ang3", "pol", "tur", "her"),
+                             labels = c("anglerfish", "pollack",
+                                        "turbot", "herring")))
+
+p <- res_df %>%
+  filter(period == "long") %>%
+  ggplot(aes(x = SSB0_rel, y = value, 
+             colour = stock_name, fill = stock_name, linetype = stock_name)) +
+  stat_smooth(n = 100, span = 0.25, se = FALSE, geom = "line", linewidth = 0.4) +
+  geom_point(size = 0.15, stroke = 0, shape = 21) +
+  scale_colour_brewer("", palette = "Set1") +
+  scale_fill_brewer("", palette = "Set1") +
+  scale_linetype("") +
+  facet_wrap(~ name, scales = "free_y", labeller = "label_parsed",
+             strip.position = "left") +
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, NA)) +
+  labs(x = expression(SSB[y == 0]/B[MSY])) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        axis.title.y = element_blank(),
+        legend.key.height = unit(0.6, "lines")
+  )
+p
+
+ggsave(filename = "output/plots/fcc/default_10k_depletion_long.png",
+       type = "cairo-png", plot = p,
+       width = 16, height = 4.5, units = "cm", dpi = 600)
+
+
+### ------------------------------------------------------------------------ ###
+### fcc - multiplier tuning ####
+### ------------------------------------------------------------------------ ###
+
+res <- foreach(fhist = c("one-way", "roller-coaster", "random"),
+               .combine = bind_rows) %:%
+  foreach(stock = stocks$stock, k = stocks$k, .combine = bind_rows) %:% 
+  foreach(multiplier = seq(0, 2, 0.05), .combine = bind_rows) %dopar% {
+    
+    #browser()
+    file_i <- paste0("output/fcc/500_100/default/", fhist, "/", stock, 
+                     "/mp_0.1_0_0.1_0.6_0_0.75_0__2_",
+                     multiplier, "_1_0.5_1.1_0.7.rds")
+    if (!file.exists(file_i)) return(NULL)
+    e <- try({stk_i <- stock(om(readRDS(file_i)))}, silent = TRUE)
+    if (is(e, "try-error")) return(NULL)
+    qnts <- collapse_correction(stk = stk_i, yrs = 101:200)
+    
+    ### reference points
+    Blim <- attr(brps[[stock]], "Blim")
+    Bmsy <- brps[[stock]]@refpts["msy", "ssb"]
+    Fmsy <- brps[[stock]]@refpts["msy", "harvest"]
+    MSY <- brps[[stock]]@refpts["msy", "yield"]
+    
+    df_i <- data.frame(
+      stock = stock, fhist = fhist, multiplier = multiplier,
+      SSBrel_all = median(qnts$ssb[, ac(101:200)]/c(Bmsy)),
+      SSBrel_long = median(qnts$ssb[, ac(151:200)]/c(Bmsy)),
+      Frel_all = median(qnts$fbar[, ac(101:200)]/c(Bmsy)),
+      Frel_long = median(qnts$fbar[, ac(151:200)]/c(Bmsy)),
+      Catchrel_all = median(qnts$catch[, ac(101:200)]/c(MSY)),
+      Catchrel_long = median(qnts$catch[, ac(151:200)]/c(MSY)),
+      riskBlim_all = mean(qnts$ssb[, ac(101:200)] < Blim),
+      riskBlim_long = mean(qnts$ssb[, ac(151:200)] < Blim)
+    )
+    return(df_i)
+}
+# saveRDS(res, "output/fcc/mult_smry.rds")
+# res <- readRDS("output/fcc/mult_smry.rds")
+
+### stocks: jnd/san/sar implausible - Fcrash = NA
+res <- res %>%
+  filter(stock %in% stocks$stock[c(1:25, 28)]) %>%
+  filter(multiplier > 0)
+
+
+res_plot <- res %>%
+  pivot_longer(cols = SSBrel_all:riskBlim_long,
+               names_to = c("name", "period"),
+               names_sep = "_",
+               values_to = "value") %>%
+  mutate(name = factor(name, levels = c("SSBrel", "Frel", "riskBlim", "Catchrel"),
+                       labels = c("SSB/B[MSY]", "F[MSY]", "B[lim]~risk", 
+                                  "Catch/MSY"))) %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "roller-coaster",
+                                          "random"))) %>%
+  left_join(stocks %>% select(stock, k)) %>%
+  mutate(stock = factor(stock),
+         period = factor(period)) %>%
+  mutate(stock2 = paste0(stock, "-", fhist))
+
+res_plot <- bind_rows(
+  res_plot, 
+  res_plot %>%
+    mutate(fhist = "all")) %>%
+  mutate(fhist = factor(fhist, levels = c("one-way", "roller-coaster",
+                                          "random", "all")))
+
+res_plot <- bind_rows(
+  res_plot %>%
+    mutate(type = "stocks"),
+  res_plot %>%
+    group_by(fhist, multiplier, period, name) %>%
+    summarise(value = mean(value)) %>%
+    mutate(type = "average"))
+
+p_risk <- res_plot %>%
+  filter(period == "long") %>%
+  filter(name == "B[lim]~risk") %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = value, group = stock2, 
+                colour = k, linewidth = type, linetype = type)) +
+  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
+  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  geom_hline(yintercept = 0.05, colour = "red", linetype = "2222") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = expression(B[lim]~risk)) +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, 0.5), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+p_catch <- res_plot %>%
+  filter(period == "long") %>%
+  filter(name == "Catch/MSY") %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = value, group = stock2, 
+                colour = k, linewidth = type, linetype = type)) +
+  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
+  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = "Catch/MSY") +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, 1), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        strip.text = element_blank())
+p_ssb <- res_plot %>%
+  filter(period == "long") %>%
+  filter(name == "SSB/B[MSY]") %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = value, group = stock2, 
+                colour = k, linewidth = type, linetype = type)) +
+  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
+  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = expression(SSB/B[MSY])) +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, NA), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        strip.text = element_blank())
+
+(p <- p_risk + p_catch + p_ssb + 
+  plot_layout(ncol = 1, guides = "collect"))
+ggsave(filename = "output/plots/fcc/mult_tuning_fhist.png",
+       type = "cairo-png", plot = p,
+       width = 16, height = 10, units = "cm", dpi = 600)
