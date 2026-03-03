@@ -300,8 +300,9 @@ if (isFALSE(ga_search)) {
       pars_MP <- vector()
     }
     file_out <- paste0(c(pars_OM, "", pars_MP), collapse = "_")
-    path_out <- paste0("output/", MP, "/", n_iter, "_", n_yrs, "/", scenario, "/",
-                       fhist, "/", paste0(names(input_i), collapse = "_"), "/")
+    path_out <- paste0("output/", par_i$MP, "/", par_i$n_iter, "_", 
+                       par_i$n_yrs, "/", par_i$scenario, "/", par_i$fhist, "/", 
+                       paste0(names(input_i), collapse = "_"), "/")
     dir.create(path_out, recursive = TRUE)
     ### skip if run already exists
     if (file.exists(paste0(path_out, "stats_", file_out, ".rds"))) return(NULL)
