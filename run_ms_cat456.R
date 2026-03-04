@@ -32,7 +32,7 @@ if (length(args) > 0) {
   if (!exists("stock_id")) stop("stock_id missing")
   
   ### MP parameters
-  if (!exists("MP")) MP <- "CL"
+  if (!exists("MP")) MP <- "fcc"
   ### MP - constant catch
   if (identical(MP, "constant_catch")) {
     if (!exists("multiplier")) multiplier <- 1
