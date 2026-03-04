@@ -269,7 +269,7 @@ if (isFALSE(ga_search)) {
     `%do_tmp%` <- `%do%`
   }
   
-  . <- foreach(hr_i = seq(nrow(hr_params))) %do_tmp% {
+  . <- foreach(hr_i = seq(nrow(hr_params)), .errorhandling = "pass") %do_tmp% {
     
     par_i <- hr_params[hr_i, ]
 
