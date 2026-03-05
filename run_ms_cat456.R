@@ -269,7 +269,7 @@ if (isFALSE(ga_search)) {
     `%do_tmp%` <- `%do%`
   }
   
-  . <- foreach(hr_i = seq(nrow(hr_params)), .errorhandling = "pass") %do_tmp% {
+  out <- foreach(hr_i = seq(nrow(hr_params)), .errorhandling = "pass") %do_tmp% {
     
     par_i <- hr_params[hr_i, ]
 
@@ -334,8 +334,12 @@ if (isFALSE(ga_search)) {
       saveRDS(object = res_stats, 
               file = paste0(path_out, "stats_", file_out, ".rds"))
     }
+    
+    return(paste0(hr_i, "/", nrow(hr_params), " complete"))
   
   }
+  
+  print(out)
   
   ### ---------------------------------------------------------------------- ###
   ### collate stats ####
