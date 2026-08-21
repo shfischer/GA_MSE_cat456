@@ -169,7 +169,7 @@ if (exists("OM")) {
       } else if (isTRUE(fhist == "roller-coaster")) {
         
         ### 0.5Fmsy until year 75, 
-        ### increase to 0.8Fcrash in 10 years
+        ### increase to 0.8Fcrash in 15 years
         ### keep at 0.8Fcrash for 5 years
         ### reduce to Fmsy in last 5 years
         fs <- rep(c(refpts["msy", "harvest"]) * 0.5, 75)
