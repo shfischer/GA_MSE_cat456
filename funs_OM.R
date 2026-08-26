@@ -5,6 +5,7 @@
 
 input_mp <- function(stocks, 
                      fhist, ### fishing history, e.g. "one-way"
+                     selectivity = "default", ### selectivity default/dome
                      n_iter = 500, ### number of iterations
                      n_yrs = 50, ### number of years for MP
                      MP, ### e.g. "hr", "constant_catch", "CC_f"
@@ -68,7 +69,12 @@ input_mp <- function(stocks,
                      ) {
   
   ### load life-history parameters
-  brps <- readRDS("input/brps_new.rds")
+  if (identical(selectivity, "default")) {
+    brps <- readRDS("input/brps_new.rds")
+  } else if (identical(selectivity, "dome")) {
+    brps <- readRDS("input/brps_dome_new.rds")
+  }
+  
   stocks_lh <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
   
   ### stock ID
@@ -92,11 +98,12 @@ input_mp <- function(stocks,
     if (isTRUE(!identical(sigmaR, 0.6) | !identical(sigmaR_rho, 0))) {
       ### bias correction
       if (isTRUE(rec_bias_correction)) {
-        m <- 1
-        cv <- sigmaR
-        v <- (cv*m)^2 ### variance
-        mu <- log(m^2/sqrt(m^2+v))
-        sigma <- sqrt(log(v/m^2+1))
+        # m <- 1
+        # cv <- sigmaR
+        # v <- (cv*m)^2 ### variance
+        # mu <- log(m^2/sqrt(m^2+v))
+        # sigma <- sqrt(log(v/m^2+1))
+        mu <- 0 - (sigmaR^2)/2
       } else {
         sigma <- sigmaR
         mu <- 0
