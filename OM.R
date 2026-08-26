@@ -3,20 +3,24 @@
 ### ------------------------------------------------------------------------ ###
 
 ### some default parameters
-n_workers <- 1
-fhist <- "one-way"
-stock_id <- 12 # pollack
+n_workers <- 10
+fhist_list <- c("one-way", "roller-coaster", "random")
+# fhist <- "one-way"
+stock_id <- 1:29
+# stock_id <- 12 # pollack
 OM <- TRUE
 n_iter <- 500
 yrs_hist <- 100
 yrs_proj <- 100
+selectivity_list <- c("default", "dome")
+# selectivity <- "default"#"dome"
 
 
 
-args <- commandArgs(TRUE)
-if (exists(x = "args_local")) args <- append(args, args_local)
-print("arguments passed on to this script:")
-print(args)
+# args <- commandArgs(TRUE)
+# if (exists(x = "args_local")) args <- append(args, args_local)
+# print("arguments passed on to this script:")
+# print(args)
 
 ### evaluate arguments passed to R
 for (i in seq_along(args)) eval(parse(text = args[[i]]))
@@ -74,7 +78,7 @@ rec_bias_correction <- TRUE
 ### with uniform distribution and random F trajectories ####
 ### ------------------------------------------------------------------------ ###
 # fhist <- "random"#"one-way"
-if (identical(fhist, "random")) {
+if (isTRUE("random" %in% fhist_list)) {
   start <- rep(0, n_iter)
   middle <- runif(n = n_iter, min = 0, max = 1)
   end <- runif(n = n_iter, min = 0, max = 1)
@@ -103,6 +107,7 @@ stocks <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
 ### BRPs from Fischer et al. (2020)
 ### -> use updated version
 brps <- readRDS("input/brps_new.rds")
+brps_dome <- readRDS("input/brps_dome_new.rds")
 
 ### create FLStocks
 stocks_subset <- stocks$stock[stock_id]#"bll"
@@ -111,18 +116,26 @@ if (exists("OM")) {
   
   if (isTRUE(OM)) {
     
-    stks_hist <- foreach(stock = stocks_subset, .errorhandling = "pass", 
-                         .packages = c("FLCore", "FLasher", "FLBRP")) %dopar% {
-      stk <- as(brps[[stock]], "FLStock")
-      refpts <- refpts(brps[[stock]])
+    stks_hist <- foreach(fhist = fhist_list) %:%
+      foreach(selectivity = selectivity_list) %:% 
+      foreach(stock = stocks_subset, .errorhandling = "pass", 
+              .packages = c("FLCore", "FLasher", "FLBRP")) %dopar% {
+      
+      if (identical(selectivity, "default")) {
+        brps_i <- brps
+      } else if (identical(selectivity, "dome")) {
+        brps_i <- brps_dome
+      }
+      stk <- as(brps_i[[stock]], "FLStock")
+      refpts <- refpts(brps_i[[stock]])
       stk <- qapply(stk, function(x) {#browser()
         dimnames(x)$year <- as.numeric(dimnames(x)$year) - 1; return(x)
       })
       stk <- stf(stk, yrs_hist + yrs_proj - dims(stk)$year + 1)
       stk <- propagate(stk, n_iter)
       ### create stock recruitment model
-      stk_sr <- FLSR(params = params(brps[[stock]]), 
-                     model = model(brps[[stock]]))
+      stk_sr <- FLSR(params = params(brps_i[[stock]]), 
+                     model = model(brps_i[[stock]]))
       ### create residuals for (historical) projection
       
       ### recruitment bias correction
@@ -201,8 +214,11 @@ if (exists("OM")) {
       
       ### save OM files
       name(stk_stf) <- stock
-      path <- paste0("input/", n_iter, "_", yrs_proj, "/OM/", fhist, 
-                     "/", stock, "/")
+      path <- paste0("input/", n_iter, "_", yrs_proj, "/",
+                     switch(selectivity, 
+                            "default" = "OM",
+                            "dome" = "OM_dome"), 
+                     "/", fhist, "/", stock, "/")
       dir.create(path, recursive = TRUE)
       
       ### stock & sr (full history)
@@ -234,6 +250,7 @@ if (exists("OM")) {
 ### gc() ####
 ### ------------------------------------------------------------------------ ###
 
+# gc()
+# if (!isFALSE(cl)) clusterEvalQ(cl, {gc()})
+stopCluster(cl)
 gc()
-if (!isFALSE(cl)) clusterEvalQ(cl, {gc()})
-
