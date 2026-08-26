@@ -25,10 +25,22 @@ brps_original <- readRDS("input/brps.rds")
 stocks_lh$minfbar <- sapply(brps_original, function(x) range(x)[["minfbar"]])
 stocks_lh$maxfbar <- sapply(brps_original, function(x) range(x)[["maxfbar"]])
 
-brps <- foreach(stk = stocks_lh$stock) %do% { # stk="pol"
+brps <- foreach(selectivity = c("standard", "dome")) %:% 
+  foreach(stk = stocks_lh$stock) %do% { # stk="pol"
   lh_i <- stocks_lh[stocks_lh$stock == stk, ]
   lh_pars <- FLPar(lh_i[c("linf", "k", "t0", "a", "b", "l50", "a50", "s")])
   lh_pars <- lhPar(lh_pars)
+  
+  ### dome shaped selectivity - if needed
+  if (identical(selectivity, "dome")) {
+    ### dome shaped selectivity
+    ### sel1 - maximum selectivity at 1st age at 100% maturity
+    ### (a50+ato95; default)
+    ### sel2 - sd for left limb: 1 (default, steep increase)
+    ### sel3 - sd for right limb: 5 (default for dome, slower decrease)
+    lh_pars["sel2"] <- 1
+    lh_pars["sel3"] <- 5
+  }
   
   ### Max age: age at l = 0.95 * linf
   max_age <- ceiling(log(0.05)/(-c(lh_pars["k"])) + c(lh_pars["t0"]))
@@ -74,7 +86,11 @@ brps <- foreach(stk = stocks_lh$stock) %do% { # stk="pol"
   
 }
 
-names(brps) <- stocks_lh$stock
+names(brps) <- c("default", "dome")
+brps <- lapply(brps, function(x) {
+  names(x) <- stocks_lh$stock
+  return(x)
+})
 
 # lapply(brps, range)
 # lapply(brps, refpts)
@@ -83,36 +99,41 @@ names(brps) <- stocks_lh$stock
 ### SSB responding to 30% recruitment impairment
 ### identical for all stocks because all have same 
 ### - B0 (1000)
-### recruitment steepness h (0.75)
+### - recruitment steepness h (0.75)
 R_diff <- function(RR0, brp, ssb) {
-  R <- c(params(brp)["a"]) * ssb / (c(params(brps$pol)["b"]) + ssb)
+  R <- c(params(brp)["a"]) * ssb / (c(params(brp)["b"]) + ssb)
   R0 <- c(refpts(brp)["virgin", "rec"])
   return((R - R0 * RR0)^2)
 }
 res <- optimise(f = R_diff, 
-                RR0 = 0.7, brp = brps$pol,
+                RR0 = 0.7, brp = brps$default$pol,
                 lower = 0, upper = 1000)
 Blim <- round(res$minimum, 2)
 
 ### add as attribute to brps
 brps <- lapply(brps, function(x) {
-  attr(x, "Blim") <- Blim
-  return(x)
+  lapply(x, function(y) {
+    attr(y, "Blim") <- Blim
+    return(y)
+  })
 })
 
 
-saveRDS(brps, file = "input/brps_new.rds")
-
+saveRDS(brps$default, file = "input/brps_new.rds")
+saveRDS(brps$dome, file = "input/brps_dome_new.rds")
 
 
 ### some explorations with recruitment residuals...
 # if (FALSE) {
 #   
-#   brp_ <- brp
-#   refpts(brp)["fmax", ] <- NA
-#   brp_old <- brps_original$pol
-#   plot(brp_old)
-#   plot(brp)
+# brp_ <- brps$default$pol
+# refpts(brp_)["fmax", ] <- NA
+# brp_old <- brps_original$pol
+# brp_dome <- brps$dome$pol
+# refpts(brp_dome)["fmax", ] <- NA
+# plot(brp_old)
+# plot(brp_)
+# plot(brp_dome)
 #   
 #   
 #   stk <- as(brp, "FLStock")
