@@ -1754,43 +1754,45 @@ ggsave(filename = "output/plots/fcc/default_10k_depletion_long.png",
 ### fcc - multiplier tuning ####
 ### ------------------------------------------------------------------------ ###
 
-res <- foreach(fhist = c("one-way", "roller-coaster", "random"),
-               .combine = bind_rows, .errorhandling = "remove") %:%
-  foreach(stock = stocks$stock, k = stocks$k, .combine = bind_rows, 
-          .errorhandling = "remove") %:% 
-  foreach(multiplier = seq(0, 2, 0.05), .combine = bind_rows, 
-          .errorhandling = "remove") %dopar% {
-    
-    #browser()
-    file_i <- paste0("output/fcc/500_100/default/", fhist, "/", stock, 
-                     "/mp_0.1_0_0.1_0.6_0_0.75_0__2_",
-                     multiplier, "_1_0.5_1.1_0.7.rds")
-    if (!file.exists(file_i)) return(NULL)
-    e <- try({stk_i <- stock(om(readRDS(file_i)))}, silent = TRUE)
-    if (is(e, "try-error")) return(NULL)
-    qnts <- collapse_correction(stk = stk_i, yrs = 101:200)
-    
-    ### reference points
-    Blim <- attr(brps[[stock]], "Blim")
-    Bmsy <- brps[[stock]]@refpts["msy", "ssb"]
-    Fmsy <- brps[[stock]]@refpts["msy", "harvest"]
-    MSY <- brps[[stock]]@refpts["msy", "yield"]
-    
-    df_i <- data.frame(
-      stock = stock, fhist = fhist, multiplier = multiplier,
-      SSBrel_all = median(qnts$ssb[, ac(101:200)]/c(Bmsy)),
-      SSBrel_long = median(qnts$ssb[, ac(151:200)]/c(Bmsy)),
-      Frel_all = median(qnts$fbar[, ac(101:200)]/c(Bmsy)),
-      Frel_long = median(qnts$fbar[, ac(151:200)]/c(Bmsy)),
-      Catchrel_all = median(qnts$catch[, ac(101:200)]/c(MSY)),
-      Catchrel_long = median(qnts$catch[, ac(151:200)]/c(MSY)),
-      riskBlim_all = mean(qnts$ssb[, ac(101:200)] < Blim),
-      riskBlim_long = mean(qnts$ssb[, ac(151:200)] < Blim)
-    )
-    return(df_i)
+if (FALSE) {
+  res <- foreach(fhist = c("one-way", "roller-coaster", "random"),
+                 .combine = bind_rows, .errorhandling = "remove") %:%
+    foreach(stock = stocks$stock, k = stocks$k, .combine = bind_rows, 
+            .errorhandling = "remove") %:% 
+    foreach(multiplier = seq(0, 2, 0.05), .combine = bind_rows, 
+            .errorhandling = "remove") %dopar% {
+      
+      #browser()
+      file_i <- paste0("output/fcc/500_100/default/", fhist, "/", stock, 
+                       "/mp_0.1_0_0.1_0.6_0_0.75_0__2_",
+                       multiplier, "_1_0.5_1.1_0.7.rds")
+      if (!file.exists(file_i)) return(NULL)
+      e <- try({stk_i <- stock(om(readRDS(file_i)))}, silent = TRUE)
+      if (is(e, "try-error")) return(NULL)
+      qnts <- collapse_correction(stk = stk_i, yrs = 101:200)
+      
+      ### reference points
+      Blim <- attr(brps[[stock]], "Blim")
+      Bmsy <- brps[[stock]]@refpts["msy", "ssb"]
+      Fmsy <- brps[[stock]]@refpts["msy", "harvest"]
+      MSY <- brps[[stock]]@refpts["msy", "yield"]
+      
+      df_i <- data.frame(
+        stock = stock, fhist = fhist, multiplier = multiplier,
+        SSBrel_all = median(qnts$ssb[, ac(101:200)]/c(Bmsy)),
+        SSBrel_long = median(qnts$ssb[, ac(151:200)]/c(Bmsy)),
+        Frel_all = median(qnts$fbar[, ac(101:200)]/c(Bmsy)),
+        Frel_long = median(qnts$fbar[, ac(151:200)]/c(Bmsy)),
+        Catchrel_all = median(qnts$catch[, ac(101:200)]/c(MSY)),
+        Catchrel_long = median(qnts$catch[, ac(151:200)]/c(MSY)),
+        riskBlim_all = mean(qnts$ssb[, ac(101:200)] < Blim),
+        riskBlim_long = mean(qnts$ssb[, ac(151:200)] < Blim)
+      )
+      return(df_i)
+  }
+  saveRDS(res, "output/fcc/mult_smry.rds")
 }
-# saveRDS(res, "output/fcc/mult_smry.rds")
-# res <- readRDS("output/fcc/mult_smry.rds")
+res <- readRDS("output/fcc/mult_smry.rds")
 
 ### stocks: jnd/san/sar implausible - Fcrash = NA
 res <- res %>%
