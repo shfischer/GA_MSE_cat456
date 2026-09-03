@@ -12,6 +12,7 @@ library(patchwork)
 library(RColorBrewer)
 library(foreach)
 source("funs.R")
+source("funs_OM.R")
 
 ### stock list
 stocks <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
@@ -1579,9 +1580,11 @@ stats_plot %>%
   geom_blank(data = stats_plot %>% mutate(data = data * 1.05)) +
   geom_vline(xintercept = 0) +
   scale_colour_gradientn("k/year", 
-                         colours = scales::brewer_pal(palette = "Blues", 
-                                                      direction = -1)(9),
-                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)) +
+                         # colours = scales::brewer_pal(palette = "Blues", 
+                         #                              direction = -1)(9),
+                         colours = hcl.colors(50),
+                         values = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1)
+                         ) +
   facet_grid(qname ~ fhist, scales = "free_y", switch = "y", 
              labeller = "label_parsed") +
   coord_cartesian(xlim = c(-5, 100), ylim = c(0, NA), expand = FALSE) +
@@ -1591,35 +1594,66 @@ stats_plot %>%
         strip.placement = "outside",
         strip.background.y = element_blank(),
         strip.text.y = element_text(size = 8))
-ggsave(filename = "output/plots/fcc/comparison_all.png",
+ggsave(filename = "output/plots/fcc/WKLIFE15/all_m0.75_projections.png",
        type = "cairo",
        width = 20, height = 12, units = "cm", dpi = 600)
 
-### plot pollack with iterations
-res_pol <- readRDS("output/fcc/500_100/default/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_1_1_0.5_1.1_0.7.rds")
-plot(stock(res_pol), iter = 1:5)
-ggsave(filename = "output/plots/fcc/pol.png",
+
+
+### plot pollack with confidence intervals and iterations
+stk_proj <- readRDS("output/fcc/500_100/default/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_1_1_0.5_1.1_0.7.rds")@om@stock
+stk <- readRDS("input/500_100/OM/one-way/pol/stk.rds")
+qnts <- collapse_correction(stk = stk_proj, yrs = 101:200)
+qnts <- lapply(qnts, window, start = 1)
+qnts$ssb[, ac(1:100)] <- ssb(stk)[, ac(1:100)]
+qnts$catch[, ac(1:100)] <- catch(stk)[, ac(1:100)]
+qnts$risk <- apply(qnts$ssb < attr(brps[["pol"]], "Blim"), 2, mean)
+qnts <- FLQuants(qnts)
+
+df <- as.data.frame(qnts[c("catch", "ssb", "risk")]) %>%
+  mutate(qname = factor(qname, levels = c("ssb", "catch", "risk"),
+                        labels = c("SSB", "Catch", "B[lim]~risk")))
+
+ggplot() +
+  geom_vline(xintercept = 0, colour = "darkgrey") +
+  geom_hline(data = df %>%
+               filter(qname == "B[lim]~risk") %>%
+               slice_head(n = 1) %>%
+               mutate(data = 0.05),
+             mapping = aes(yintercept = data), colour = "red") +
+  geom_ribbon(data = df %>%
+                group_by(qname, year) %>%
+                summarise(Q5 = quantile(data, probs = 0.05),
+                          Q95 = quantile(data, probs = 0.95)),
+              aes(x = year - 100, ymin = Q5, ymax = Q95),
+              colour = "grey", alpha = 0.1, linewidth = 0) +
+  geom_ribbon(data = df %>%
+                group_by(qname, year) %>%
+                summarise(Q25 = quantile(data, probs = 0.25),
+                          Q75 = quantile(data, probs = 0.75)),
+              aes(x = year - 100, ymin = Q25, ymax = Q75),
+              colour = "grey", alpha = 0.1, linewidth = 0) +
+  geom_line(data = df %>%
+              group_by(qname, year) %>%
+              summarise(data = median(data, na.rm = TRUE)),
+            mapping = aes(x = year - 100, y = data)) +
+  geom_line(data = df %>% filter(iter %in% 1:5 &
+                                   qname != "B[lim]~risk") ,
+            aes(x = year - 100, y = data, colour = iter), 
+            linewidth = 0.1,
+            show.legend = FALSE) +
+  facet_wrap(~ qname, scales = "free_y", strip.position = "left",
+             labeller = "label_parsed", ncol = 1) +
+  coord_cartesian(xlim = c(-5, 100)) +
+  labs(x = "Year") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background = element_blank(),
+        strip.text = element_text(size = 8),
+        axis.title.y = element_blank())
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_ow_m0.75_proj.png",
        type = "cairo",
        width = 20, height = 12, units = "cm", dpi = 600)
-
-### ------------------------------------------------------------------------ ###
-### fcc - pollack - multiplier ####
-### ------------------------------------------------------------------------ ###
-
-res <- foreach(multiplier = seq(0.5, 1.4, 0.1),
-               .combine = bind_rows) %do% {
-  res_i <- readRDS(paste0("output/fcc/500_100/default/one-way/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_", multiplier, "_1_0.5_1.1_0.7.rds"))
-  Blim <- attr(brps[["pol"]], "Blim")
-  Bmsy <- c(refpts(brps[["pol"]])["msy", "ssb"])
-  Cmsy <- c(refpts(brps[["pol"]])["msy", "yield"])
-  risk_i <- mean(iterMeans(ssb(stock(om(res_i)))[, ac(101:200)] < Blim))
-  ssb_i <- median(ssb(stock(om(res_i)))[, ac(101:200)]/Bmsy)
-  catch_i <- median(catch(stock(om(res_i)))[, ac(101:200)]/Cmsy)
-  data.frame(multiplier = multiplier, 
-             risk = risk_i,
-             ssb = ssb_i,
-             catch = catch_i)
-}
 
 ### ------------------------------------------------------------------------ ###
 ### fcc - risk vs depletion ####
@@ -1745,7 +1779,7 @@ p <- res_df %>%
   )
 p
 
-ggsave(filename = "output/plots/fcc/default_10k_depletion_long.png",
+ggsave(filename = "output/plots/fcc/WKLIFE15/default_10k_depletion_long.png",
        type = "cairo-png", plot = p,
        width = 16, height = 6, units = "cm", dpi = 600)
 
@@ -1838,9 +1872,11 @@ p_risk <- res_plot %>%
   geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
   geom_line(aes(x = multiplier, y = value, group = stock2, 
                 colour = k, linewidth = type, linetype = type)) +
-  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
-  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
-  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  scale_linewidth_manual("", values = c(stocks = 0.1, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "solid", average = "solid")) +
+  scale_colour_gradientn(expression("K (yr"^{-1}*")"), na.value = "black",
+                        colours = hcl.colors(50),
+                        limits = c(0, 0.5)) +
   geom_hline(yintercept = 0.05, colour = "red", linetype = "2222") +
   facet_wrap(~ fhist, nrow = 1) + 
   labs(y = expression(B[lim]~risk)) +
@@ -1857,9 +1893,11 @@ p_catch <- res_plot %>%
   geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
   geom_line(aes(x = multiplier, y = value, group = stock2, 
                 colour = k, linewidth = type, linetype = type)) +
-  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
-  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
-  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  scale_linewidth_manual("", values = c(stocks = 0.1, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "solid", average = "solid")) +
+  scale_colour_gradientn(expression("K (yr"^{-1}*")"), na.value = "black",
+                         colours = hcl.colors(50),
+                         limits = c(0, 0.5)) +
   facet_wrap(~ fhist, nrow = 1) + 
   labs(y = "Catch/MSY") +
   coord_cartesian(xlim = c(0, 1.99), ylim = c(0, 1), expand = FALSE) +
@@ -1876,9 +1914,11 @@ p_ssb <- res_plot %>%
   geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
   geom_line(aes(x = multiplier, y = value, group = stock2, 
                 colour = k, linewidth = type, linetype = type)) +
-  scale_linewidth_manual("", values = c(stocks = 0.2, average = 0.5)) +
-  scale_linetype_manual("", values = c(stocks = "1111", average = "solid")) +
-  scale_colour_gradient(expression("K (yr"^{-1}*")"), na.value = "black") +
+  scale_linewidth_manual("", values = c(stocks = 0.1, average = 0.5)) +
+  scale_linetype_manual("", values = c(stocks = "solid", average = "solid")) +
+  scale_colour_gradientn(expression("K (yr"^{-1}*")"), na.value = "black",
+                         colours = hcl.colors(50),
+                         limits = c(0, 0.5)) +
   facet_wrap(~ fhist, nrow = 1) + 
   labs(y = expression(SSB/B[MSY]), x = "Multiplier") +
   coord_cartesian(xlim = c(0, 1.99), ylim = c(0, NA), expand = FALSE) +
@@ -1888,7 +1928,7 @@ p_ssb <- res_plot %>%
 
 (p <- p_risk + p_catch + p_ssb + 
   plot_layout(ncol = 1, guides = "collect"))
-ggsave(filename = "output/plots/fcc/mult_tuning_fhist.png",
+ggsave(filename = "output/plots/fcc/WKLIFE15/mult_tuning_fhist.png",
        type = "cairo-png", plot = p,
        width = 16, height = 10, units = "cm", dpi = 600)
 
@@ -2135,7 +2175,7 @@ ggsave(filename = "output/plots/fcc/fcc_cc_catch_risk_4.png",
 ### sensitivity to simulation assumptions ####
 ### ------------------------------------------------------------------------ ###
 ### use pollack as example
-### default: 50 yrs, 500 iterations
+### default: 100 yrs, 500 iterations
 
 ### some generic parameters
 brp <- readRDS("input/brps_new.rds")[["pol"]]
@@ -2144,151 +2184,157 @@ Bmsy <- c(refpts(brp)["msy", "ssb"])
 MSY <- c(refpts(brp)["msy", "yield"])
 
 ### stats over time
-stats_sens_time <- foreach(fhist = c("random", "one-way", "roller-coaster"),
-                           .combine = rbind) %do% {
-  #browser()
-  file <- paste0("mp_0.1_0_0.1_0.6_0_0.75_0__2_0.75_1_0.5_1.1_0.7")
-  res <- readRDS(paste0("output/fcc/500_100/default/", fhist, 
-                        "/pol/", file, ".rds"))
-  ### collapse correction
-  res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
-  ### template
-  tmp <- data.frame(year = 1:100)
-  ### Blim risk
-  tmp$risk_average <- sapply(1:100, function(x) {
-    mean(c(res_corrected$ssb[, ac(seq(from = 101, length.out = x))] < Blim), 
-         na.rm = TRUE)
-  })
-  tmp$risk_annual <- c(apply(res_corrected$ssb < Blim, 2, mean, na.rm = TRUE))
-  ### SSB
-  tmp$SSB_annual <- sapply(1:100, function(x) {
-    median(c(res_corrected$ssb[, x]/Bmsy), na.rm = TRUE)
-  })
-  tmp$SSB_average <-  sapply(1:100, function(x) {
-    median(c(res_corrected$ssb[, ac(seq(from = 101, length.out = x))]/Bmsy), 
+if (FALSE) {
+  stats_sens_time <- foreach(fhist = c("random", "one-way", "roller-coaster"),
+                             .combine = rbind) %do% {
+    #browser()
+    file <- paste0("mp_0.1_0_0.1_0.6_0_0.75_0__2_0.75_1_0.5_1.1_0.7")
+    res <- readRDS(paste0("output/fcc/500_100/default/", fhist, 
+                          "/pol/", file, ".rds"))
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+    ### template
+    tmp <- data.frame(year = 1:100)
+    ### Blim risk
+    tmp$risk_average <- sapply(1:100, function(x) {
+      mean(c(res_corrected$ssb[, ac(seq(from = 101, length.out = x))] < Blim), 
            na.rm = TRUE)
-  })
-  ### Catch
-  tmp$Catch_annual <- sapply(1:100, function(x) {
-    median(c(res_corrected$catch[, x]/MSY), na.rm = TRUE)
-  })
-  tmp$Catch_average <-  sapply(1:100, function(x) {
-    median(c(res_corrected$catch[, ac(seq(from = 101, length.out = x))]/MSY), 
-           na.rm = TRUE)
-  })
-  tmp <- tmp %>%
-    pivot_longer(2:7, names_to = c(".value", "period"), names_sep = "_")
-  ### full data.frame
-  df_i <- data.frame(
-    stock = "pol", 
-    interval = 2, multiplier = 0.75, idxL_range = 1, catch_limit = 0.5,
-    upper_constraint = 1.1, lower_constraint = 0.7,
-    sigmaL = 0.1, sigmaL_rho = 0, sigmaR = 0.6, sigmaR_rho = 0, 
-    steepness = 0.75,
-    risk_Blim = tmp$risk,
-    SSB_rel = tmp$SSB,
-    Catch_rel = tmp$Catch,
-    stat_metric = tmp$period,
-    fhist = fhist,
-    n_yrs = tmp$year,
-    n_iter = 500,
-    sensitivity = "period") %>%
-    arrange(stat_metric, n_yrs)
-    return(df_i)
+    })
+    tmp$risk_annual <- c(apply(res_corrected$ssb < Blim, 2, mean, na.rm = TRUE))
+    ### SSB
+    tmp$SSB_annual <- sapply(1:100, function(x) {
+      median(c(res_corrected$ssb[, x]/Bmsy), na.rm = TRUE)
+    })
+    tmp$SSB_average <-  sapply(1:100, function(x) {
+      median(c(res_corrected$ssb[, ac(seq(from = 101, length.out = x))]/Bmsy), 
+             na.rm = TRUE)
+    })
+    ### Catch
+    tmp$Catch_annual <- sapply(1:100, function(x) {
+      median(c(res_corrected$catch[, x]/MSY), na.rm = TRUE)
+    })
+    tmp$Catch_average <-  sapply(1:100, function(x) {
+      median(c(res_corrected$catch[, ac(seq(from = 101, length.out = x))]/MSY), 
+             na.rm = TRUE)
+    })
+    tmp <- tmp %>%
+      pivot_longer(2:7, names_to = c(".value", "period"), names_sep = "_")
+    ### full data.frame
+    df_i <- data.frame(
+      stock = "pol", 
+      interval = 2, multiplier = 0.75, idxL_range = 1, catch_limit = 0.5,
+      upper_constraint = 1.1, lower_constraint = 0.7,
+      sigmaL = 0.1, sigmaL_rho = 0, sigmaR = 0.6, sigmaR_rho = 0, 
+      steepness = 0.75,
+      risk_Blim = tmp$risk,
+      SSB_rel = tmp$SSB,
+      Catch_rel = tmp$Catch,
+      stat_metric = tmp$period,
+      fhist = fhist,
+      n_yrs = tmp$year,
+      n_iter = 500,
+      sensitivity = "period") %>%
+      arrange(stat_metric, n_yrs)
+      return(df_i)
+  }
+  stats_sens_time <- stats_sens_time %>%
+    pivot_longer(c(risk_Blim, SSB_rel, Catch_rel)) %>%
+    mutate(name = factor(name, levels = c("Catch_rel", "SSB_rel", "risk_Blim"),
+                         labels = c("Catch/MSY", "SSB/B[MSY]", "B[lim]~risk")),
+           fhist = factor(fhist, levels = c("one-way", "roller-coaster",
+                                            "random")))
+  saveRDS(stats_sens_time, "output/fcc/pol_sensitivity_time.rds")
 }
-stats_sens_time <- stats_sens_time %>%
-  pivot_longer(c(risk_Blim, SSB_rel, Catch_rel)) %>%
-  mutate(name = factor(name, levels = c("Catch_rel", "SSB_rel", "risk_Blim"),
-                       labels = c("Catch/MSY", "SSB/B[MSY]", "B[lim]~risk")),
-         fhist = factor(fhist, levels = c("one-way", "roller-coaster",
-                                          "random")))
-saveRDS(stats_sens_time, "output/fcc/pol_sensitivity_time.rds")
 stats_sens_time <- readRDS("output/fcc/pol_sensitivity_time.rds")
 
 ### stock status
-stats_sens_status <- foreach(fhist = c("random"),
-  .combine = rbind) %do% {
-  #browser()
-  res <- readRDS(paste0("output/fcc/10000_100/default/", fhist, 
-                       "/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_0.75_1_0.5_1.1_0.7.rds"))
-  ### collapse correction
-  res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
-  ### starting condition
-  SSBs0 <- ssb(res@om@stock)[, ac(100)]
-  SSBs0 <- SSBs0/Bmsy
-  SSBs0 <- c(SSBs0)
-  SSB_breaks <- seq(from = 0, to = max(SSBs0), by = 0.1)
-  SSB_groups <- cut(SSBs0, breaks = SSB_breaks)
-  SSB_levels <- unique(as.character(SSB_groups))
-  ### number of replicates per group
-  group_n <- sapply(SSB_levels, function(x) {
-    length(which(SSB_groups %in% x))
-  })
-  # group_n[sort(names(group_n))]
-  ### Blim risk per group
-  ### SSB is on absolute scale 
-  risk_group <- sapply(SSB_levels, function(x) {
-    tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]
-    mean(tmp < (Blim))
-  })
-  ### SSB (long-term median) per group
-  SSB_group <- sapply(SSB_levels, function(x) {
-    tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]/Bmsy
-    median(tmp)
-  })
-  ### Catch (long-term median) per group
-  Catch_group <- sapply(SSB_levels, function(x) {
-    tmp <- res_corrected$catch[, ac(151:200),,,, which(SSB_groups %in% x)]/MSY
-    median(tmp)
-  })
-  ### get starting conditions
-  SSB_levels <- sapply(SSB_levels, function(x) {
-    x <- gsub(x = x, pattern = "\\(|\\]", replacement = "")
-    x <- unlist(strsplit(x, split = ","))
-    mean(as.numeric(x))
-  })
-  pos_remove <- which(is.na(SSB_levels))
-  df_i <- data.frame(
-    stock = "pol", 
-    interval = 2, multiplier = 0.75, idxL_range = 1, catch_limit = 0.5,
-    upper_constraint = 1.1, lower_constraint = 0.7,
-    sigmaL = 0.1, sigmaL_rho = 0, sigmaR = 0.6, sigmaR_rho = 0, 
-    steepness = 0.75,
-    risk_Blim = unlist(risk_group)[-pos_remove],
-    SSB_rel = unlist(SSB_group)[-pos_remove],
-    Catch_rel = unlist(Catch_group)[-pos_remove],
-    SSB0_rel = unlist(SSB_levels)[-pos_remove],
-    n_iter_part = unlist(group_n)[-pos_remove],
-    fhist = fhist,
-    n_yrs = 50,
-    n_iter = 10000,
-    sensitivity = "stock_status")
-  row.names(df_i) <- NULL
-  df_i <- df_i[order(df_i$SSB0_rel), ]
-  return(df_i)
+if (FALSE) {
+  stats_sens_status <- foreach(fhist = c("random"),
+    .combine = rbind) %do% {
+    #browser()
+    res <- readRDS(paste0("output/fcc/10000_100/default/", fhist, 
+                         "/pol/mp_0.1_0_0.1_0.6_0_0.75_0__2_0.75_1_0.5_1.1_0.7.rds"))
+    ### collapse correction
+    res_corrected <- collapse_correction(stk = res@om@stock, yrs = 101:200)
+    ### starting condition
+    SSBs0 <- ssb(res@om@stock)[, ac(100)]
+    SSBs0 <- SSBs0/Bmsy
+    SSBs0 <- c(SSBs0)
+    SSB_breaks <- seq(from = 0, to = max(SSBs0), by = 0.1)
+    SSB_groups <- cut(SSBs0, breaks = SSB_breaks)
+    SSB_levels <- unique(as.character(SSB_groups))
+    ### number of replicates per group
+    group_n <- sapply(SSB_levels, function(x) {
+      length(which(SSB_groups %in% x))
+    })
+    # group_n[sort(names(group_n))]
+    ### Blim risk per group
+    ### SSB is on absolute scale 
+    risk_group <- sapply(SSB_levels, function(x) {
+      tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]
+      mean(tmp < (Blim))
+    })
+    ### SSB (long-term median) per group
+    SSB_group <- sapply(SSB_levels, function(x) {
+      tmp <- res_corrected$ssb[, ac(151:200),,,, which(SSB_groups %in% x)]/Bmsy
+      median(tmp)
+    })
+    ### Catch (long-term median) per group
+    Catch_group <- sapply(SSB_levels, function(x) {
+      tmp <- res_corrected$catch[, ac(151:200),,,, which(SSB_groups %in% x)]/MSY
+      median(tmp)
+    })
+    ### get starting conditions
+    SSB_levels <- sapply(SSB_levels, function(x) {
+      x <- gsub(x = x, pattern = "\\(|\\]", replacement = "")
+      x <- unlist(strsplit(x, split = ","))
+      mean(as.numeric(x))
+    })
+    pos_remove <- which(is.na(SSB_levels))
+    df_i <- data.frame(
+      stock = "pol", 
+      interval = 2, multiplier = 0.75, idxL_range = 1, catch_limit = 0.5,
+      upper_constraint = 1.1, lower_constraint = 0.7,
+      sigmaL = 0.1, sigmaL_rho = 0, sigmaR = 0.6, sigmaR_rho = 0, 
+      steepness = 0.75,
+      risk_Blim = unlist(risk_group)[-pos_remove],
+      SSB_rel = unlist(SSB_group)[-pos_remove],
+      Catch_rel = unlist(Catch_group)[-pos_remove],
+      SSB0_rel = unlist(SSB_levels)[-pos_remove],
+      n_iter_part = unlist(group_n)[-pos_remove],
+      fhist = fhist,
+      n_yrs = 50,
+      n_iter = 10000,
+      sensitivity = "stock_status")
+    row.names(df_i) <- NULL
+    df_i <- df_i[order(df_i$SSB0_rel), ]
+    return(df_i)
+  }
+  stats_sens_status <- stats_sens_status %>%
+    pivot_longer(c(risk_Blim, SSB_rel, Catch_rel)) %>%
+    mutate(name = factor(name, levels = c("Catch_rel", "SSB_rel", "risk_Blim"),
+                         labels = c("Catch/MSY", "SSB/B[MSY]", "B[lim]~risk")),
+           fhist = factor(fhist, levels = c("one-way", "roller-coaster",
+                                            "random")))
+  saveRDS(stats_sens_status, "output/fcc/pol_sensitivity_status.rds")
 }
-stats_sens_status <- stats_sens_status %>%
-  pivot_longer(c(risk_Blim, SSB_rel, Catch_rel)) %>%
-  mutate(name = factor(name, levels = c("Catch_rel", "SSB_rel", "risk_Blim"),
-                       labels = c("Catch/MSY", "SSB/B[MSY]", "B[lim]~risk")),
-         fhist = factor(fhist, levels = c("one-way", "roller-coaster",
-                                          "random")))
-saveRDS(stats_sens_status, "output/fcc/pol_sensitivity_status.rds")
 stats_sens_status <- readRDS("output/fcc/pol_sensitivity_status.rds")
 
 ### sensitivity runs - collate stats
-stats_runs <- foreach(fhist = c("one-way", "roller-coaster", "random"), 
-        .combine = bind_rows) %do% {#browser()
-  path <- paste0("output/fcc/500_100/default/", fhist, "/pol/")
-  files <- list.files(path, pattern = "stats_")
-  scns <- lapply(paste0(path, files), readRDS)
-  scns <- do.call(bind_rows, scns)
-  scns <- scns %>% filter(multiplier == 0.75)
-  saveRDS(scns, file = paste0(path, "sensitivity_stats.rds"))
-  return(scns)
+if (FALSE) {
+  stats_runs <- foreach(fhist = c("one-way", "roller-coaster", "random"), 
+          .combine = bind_rows) %do% {#browser()
+    path <- paste0("output/fcc/500_100/default/", fhist, "/pol/")
+    files <- list.files(path, pattern = "stats_")
+    scns <- lapply(paste0(path, files), readRDS)
+    scns <- do.call(bind_rows, scns)
+    scns <- scns %>% filter(multiplier == 0.75)
+    saveRDS(scns, file = paste0(path, "sensitivity_stats.rds"))
+    return(scns)
+  }
+  saveRDS(stats_runs, "output/fcc/pol_sensitivity.rds")
 }
-saveRDS(stats_runs, "output/fcc/pol_sensitivity.rds")
-stats_sens <- readRDS("output/fcc/pol_sensitivity.rds")
+stats_runs <- readRDS("output/fcc/pol_sensitivity.rds")
 
 ### plot sensitivity analysis
 ### use long term (last 50 years)
@@ -2351,8 +2397,8 @@ p_sigmaR_rho <- stats_sens_plot %>%
   filter(sigmaL == 0.1 & sigmaL_rho == 0 & sigmaR == 0.6 & steepness == 0.75) %>%
   ggplot(aes(x = sigmaR_rho, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  geom_vline(xintercept = 0.0, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", size = 0.4,
+  geom_vline(xintercept = 0.0, linewidth = 0.4, colour = "grey") +
+  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", linewidth = 0.4,
               show.legend = FALSE) + 
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
@@ -2378,8 +2424,8 @@ p_steepness <- stats_sens_plot %>%
   filter(sigmaL == 0.1 & sigmaL_rho == 0 & sigmaR == 0.6 & sigmaR_rho == 0) %>%
   ggplot(aes(x = steepness, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  geom_vline(xintercept = 0.75, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", size = 0.4,
+  geom_vline(xintercept = 0.75, linewidth = 0.4, colour = "grey") +
+  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
               show.legend = FALSE) + 
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
@@ -2405,8 +2451,8 @@ p_sigmaL <- stats_sens_plot %>%
   filter(steepness == 0.75 & sigmaL_rho == 0 & sigmaR == 0.6 & sigmaR_rho == 0) %>%
   ggplot(aes(x = sigmaL, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  geom_vline(xintercept = 0.2, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", size = 0.4,
+  geom_vline(xintercept = 0.2, linewidth = 0.4, colour = "grey") +
+  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", linewidth = 0.4,
               show.legend = FALSE) + 
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
@@ -2432,8 +2478,8 @@ p_sigmaL_rho <- stats_sens_plot %>%
   filter(steepness == 0.75 & sigmaL == 0.1 & sigmaR == 0.6 & sigmaR_rho == 0) %>%
   ggplot(aes(x = sigmaL_rho, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  geom_vline(xintercept = 0.0, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", size = 0.4,
+  geom_vline(xintercept = 0.0, linewidth = 0.4, colour = "grey") +
+  stat_smooth(n = 50, span = 0.2, se = FALSE, geom = "line", linewidth = 0.4,
               show.legend = FALSE) + 
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
@@ -2459,7 +2505,7 @@ p_sens_status <- stats_sens_status %>%
   filter(SSB0_rel <= 2) %>%
   ggplot(aes(x = SSB0_rel, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", size = 0.4,
+  stat_smooth(n = 50, span = 0.4, se = FALSE, geom = "line", linewidth = 0.4,
               show.legend = FALSE) + 
   geom_point(size = 0.15, stroke = 0, shape = 21, show.legend = FALSE) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
@@ -2487,8 +2533,8 @@ p_sens_period <- stats_sens_time %>%
   filter(stat_metric == "annual") %>%
   ggplot(aes(x = n_yrs, y = value, fill = fhist, colour = fhist, 
              linetype = fhist)) +
-  geom_vline(xintercept = 100, size = 0.4, colour = "grey") +
-  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", size = 0.4) + 
+  geom_vline(xintercept = 100, linewidth = 0.4, colour = "grey") +
+  stat_smooth(n = 50, span = 0.1, se = FALSE, geom = "line", linewidth = 0.4) + 
   geom_point(size = 0.15, stroke = 0, shape = 21) +
   geom_blank(data = df_blank, aes(x = x, y = value)) +
   facet_grid(name ~ "'Implementation\nperiod'", scales = "free", 
@@ -2522,9 +2568,7 @@ p <- p_sigmaR + p_sigmaR_rho + p_steepness +
   plot_layout(nrow = 1)
 p
 
-ggsave(filename = "output/plots/fcc/pol_sensitivity_stats.png", 
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_sensitivity_stats.png", 
        type = "cairo", plot = p,
        width = 17, height = 8, units = "cm", dpi = 600)
-ggsave(filename = "output/plots/fcc/pol_sensitivity_stats.pdf", plot = p,
-       width = 17, height = 8, units = "cm")
 
