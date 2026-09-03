@@ -1,4 +1,4 @@
-Simulations for ICES categories 4-6
+Empirical harvest control rules for ICES categories 4-6
 ================
 
 This repository
@@ -11,10 +11,23 @@ branch displayed as default branch.
 ## Introduction
 
 This repository contains the code for an exploration of the ICES
-approach for categories 4-6. It includes the typical ICES harvest
-control rule (constant catch with PA buffer) and a new harvest control
-rule that infers the stock trend from trends in catch and mean catch
-length time series (including optimisation with a genetic algorithm).
+approach for categories 4-6. It includes
+
+- the typical ICES harvest control rule (constant catch with PA buffer,
+  `MP = "constant_catch"`)
+
+- a new harvest control rule that adjust the catch based on the slope of
+  a length-based catch curve (`fcc`)
+
+- several exploratory (but abandoned) harvest control rules (adjusting
+  the constant catch based on mean catch length `CC_f`, guessing the
+  stock trend from catch and mean catch length time series `CL`,
+  guessing the stock trend from catch and length-based catch curves
+  `CL_cc`)
+
+- it also includes code for the ICES category 3 methods (hr and rfb
+  rules, `rfb`, `chr`)
+
 The simulation is based on the Fisheries Library in R
 ([FLR](http://www.flr-project.org/)) and the Assessment for All (a4a)
 standard MSE framework ([`FLR/mse`](github.com/FLR/mse)) developed
@@ -69,17 +82,19 @@ The following input files are provided:
 - `input/brps.rds` contains the FLBRP objects which are the basis for
   the OMs (old, not used anymore)
 - `input/brps_new.rds` updated FLBRP objects created in `OM_lh.R`
+- `input/brps_dome_new.rds` FLBRP objects with dome-shaped selectivity
+  (based on `brps_new.R`
 
 ## R, R packages and version info
 
 This is branch `cat456` in which R and R packages have been updated to R
-4.2 (4.3 should also work):
+4.4:
 
 ``` r
 > sessionInfo()
-R version 4.2.3 (2023-03-15 ucrt)
-Platform: x86_64-w64-mingw32/x64 (64-bit)
-Running under: Windows 10 x64 (build 19043)
+R version 4.4.2 (2024-10-31 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26200)
 ```
 
 The package versions and their dependencies are recorded with the R
@@ -119,4 +134,5 @@ remotes::install_github(repo = "shfischer/mse", ref = "fbea3bc9351a9efd831baa6be
 ```
 
 For using MPI parallelisation, an MPI backend such as OpenMPI and the R
-packages `Rmpi` and `doMPI` are required.
+packages `Rmpi` and `doMPI` are required. This is not required and most
+simulations also run with standard parallelisation using `doParallel`.
