@@ -108,6 +108,8 @@ if (length(args) > 0) {
   if (!exists("sigmaR_rho")) sigmaR_rho <- 0.0
   ### recruitment steepness
   if (!exists("steepness")) steepness <- 0.75
+  ### fishery selectivity
+  if (!exists("selectivity")) selectivity <- "default"
   
   ### what to save
   if (!exists("check_file")) check_file <- TRUE
@@ -240,7 +242,7 @@ hr_params <- c(
   "stock_id", "fhist", "n_iter", "n_yrs", "MP", "scenario", "n_blocks",
   ### uncertainty
   "sigmaL", "sigmaL_rho", "sigmaC", "sigmaCC", "sigmaCC_rho",
-  "sigmaR", "sigmaR_rho", "steepness",
+  "sigmaR", "sigmaR_rho", "steepness", "selectivity",
   "sigmaIEM",
   ### MP parameters
   "multiplier", "interval", "n_catch", "n_length_1", "n_length_2",
