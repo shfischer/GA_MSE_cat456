@@ -89,10 +89,17 @@ input_mp <- function(stocks,
     Blim <- attr(brps[[stock]], "Blim")
     
     ### load stock & sr
-    stk <- readRDS(paste0("input/", n_iter, "_", n_yrs, "/OM/", fhist, "/",
+    stk <- readRDS(paste0("input/", n_iter, "_", n_yrs, 
+                          switch(selectivity, 
+                                 "default" = "/OM/",
+                                 "dome" = "/OM_dome/"),
+                          fhist, "/",
                           stock, "/stk.rds"))
-    sr <- readRDS(paste0("input/", n_iter, "_", n_yrs, "/OM/", fhist, "/",
-                          stock, "/sr.rds"))
+    sr <- readRDS(paste0("input/", n_iter, "_", n_yrs, 
+                         switch(selectivity, 
+                                "default" = "/OM/",
+                                "dome" = "/OM_dome/"),
+                         fhist, "/", stock, "/sr.rds"))
     
     ### adapt recruitment variability if needed #####
     if (isTRUE(!identical(sigmaR, 0.6) | !identical(sigmaR_rho, 0))) {
