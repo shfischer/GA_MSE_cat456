@@ -2572,3 +2572,247 @@ ggsave(filename = "output/plots/fcc/WKLIFE15/pol_sensitivity_stats.png",
        type = "cairo", plot = p,
        width = 17, height = 8, units = "cm", dpi = 600)
 
+### ------------------------------------------------------------------------ ###
+### fcc - illustrate length data process ####
+### ------------------------------------------------------------------------ ###
+### use pollack scenario
+### one-way, multiplier=0.75
+
+brp <- readRDS("input/brps_new.rds")[["pol"]]
+input <- input_mp(stocks = "pol", fhist = "one-way", n_yrs = 100, MP = "fcc")
+params <- input$pol$oem@args$lngth_par
+stk_median <- iterMedians(stock(input$pol$om))
+
+ages <- an(dimnames(stk_median)$age)
+### weights at lengths identical for all iterations and years
+weights <- c(catch.wt(stk_median)[, ac(75)])
+lengths <- (weights / c(params["a"]))^(1 / c(params["b"]))
+### relative age
+ages_rel <- -log(1 - lengths/c(params$Linf))
+
+yrs <- 95:99
+
+cn <- catch.n(stk_median[, ac(yrs)])
+df_cn <- as.data.frame(cn)
+
+p_catch <- df_cn %>%
+  ggplot(aes(x = age, y = data)) +
+  geom_col() +
+  facet_wrap(~ paste0("Year: ", year - 100), ncol = 1, 
+             strip.position = "right") +
+  labs(x = "Age (years)", y = "Catch numbers") +
+  theme_bw(base_size = 8)
+
+### log numbers vs relative age
+df_cn_log <- df_cn %>%
+  mutate(logN = log(data)) %>%
+  full_join(data.frame(age = ages, age_rel = ages_rel)) %>%
+  mutate(include = age >= 4)
+
+### linear model to get slope
+lm_fits <- lapply(yrs, function(x) {#browser()
+  tmp <- df_cn_log[df_cn_log$include & df_cn_log$year == x, ]
+  lm(logN ~ age_rel, data = tmp)
+})
+names(lm_fits) <- yrs
+lm_pars <- lapply(yrs, function(x) {#browser()
+  data.frame(intercept = lm_fits[[ac(x)]]$coefficients[[1]],
+             slope = lm_fits[[ac(x)]]$coefficients[[2]],
+             year = x)
+})
+lm_pars <- do.call(rbind, lm_pars)
+lm_pairs <- lapply(yrs, function(x) {
+  data.frame(year = x,
+             age_rel = c(0, 10),
+             logN = predict(lm_fits[[ac(x)]], data.frame(age_rel = c(0, 10))))
+})
+lm_pairs <- do.call(rbind, lm_pairs)
+
+
+p_slope <- df_cn_log %>%
+  ggplot(aes(x = age_rel, y = logN)) +
+  geom_point(mapping = aes(colour = include), show.legend = FALSE) +
+  geom_line(data = lm_pairs,
+            mapping = aes(x = age_rel, y = logN)) +
+  geom_text(data = lm_pars,
+            mapping = aes(label = paste0("Slope: ", round(slope, 2))), 
+            x = 2, y = -4) +
+  scale_colour_manual(values = c("FALSE" = "black", "TRUE" = "red")) +
+  facet_wrap(~ paste0("Year: ", year - 100), ncol = 1, 
+             strip.position = "right") +
+  labs(x = expression("Relative age: "~-ln(1-t/L[inf])), y = "Log-catch numbers") +
+  coord_cartesian(xlim = c(0, 3.2), ylim = c(-14.9, 0), expand = FALSE) +
+  theme_bw(base_size = 8)
+
+p_catch + 
+  theme(strip.text = element_blank()) +
+  p_slope
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_lcc_illustration.png", 
+       type = "cairo", 
+       width = 14, height = 10, units = "cm", dpi = 600)
+
+### plot catch and SSB for same period
+FLQuants(SSB = ssb(stk_median), Catch = catch(stk_median),
+         "F" = fbar(stk_median)) |>
+  as.data.frame() %>%
+  mutate(qname = factor(qname, levels = c("F", "Catch", "SSB"))) %>%
+  filter(year <= 100) %>%
+  ggplot(aes(x = year - 100, y = data)) +
+  annotation_custom(grob = grid::rectGrob(
+    gp = grid::gpar(fill = "grey", alpha = 0.5, lty = 0)),
+    xmin = -5, xmax = -1, ymin = -10, ymax = 1e+3) +
+  geom_line() +
+  facet_wrap(~qname, scales = "free", ncol = 1, 
+             strip.position = "left") +
+  labs(x = "Year") +
+  coord_cartesian(xlim = c(-35, 0), ylim = c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement = "outside",
+        strip.background = element_blank(),
+        strip.text = element_text(size = 8),
+        axis.title.y = element_blank())
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_lcc_illustration_stock.png", 
+       type = "cairo", 
+       width = 6, height = 5, units = "cm", dpi = 600)
+
+
+### ------------------------------------------------------------------------ ###
+### fcc - logistic vs dome shaped selectivity - pollack ####
+### ------------------------------------------------------------------------ ###
+### use statistics over long term (last 50 of 100 years)
+
+brps_dome <- readRDS("input/brps_dome_new.rds")
+
+if (FALSE) {
+  ### collate results from runs with dome-shaped selectivity
+  stats_dome <- foreach(selectivity = c("default_dome"),
+                        .combine = bind_rows) %:%
+    foreach(fhist = c("one-way", "roller-coaster", "random"), 
+                        .combine = bind_rows) %:%
+    foreach(multiplier = seq(0, 2, 0.05), .combine = bind_rows) %do% {
+      
+      #browser()
+      file_i <- paste0("output/fcc/500_100/", selectivity, "/", fhist, "/pol/",
+                       "mp_0.1_0_0.1_0.6_0_0.75_0__2_", multiplier, 
+                       "_1_0.5_1.1_0.7.rds")
+      stk_i <- stock(om(readRDS(file_i)))
+      qnts <- collapse_correction(stk = stk_i, yrs = 101:200)
+      
+      ### reference points
+      Blim <- attr(brps_dome[["pol"]], "Blim")
+      Bmsy <- brps_dome[["pol"]]@refpts["msy", "ssb"]
+      Fmsy <- brps_dome[["pol"]]@refpts["msy", "harvest"]
+      MSY <- brps_dome[["pol"]]@refpts["msy", "yield"]
+      
+      df_i <- data.frame(
+        stock = "pol", fhist = fhist, multiplier = multiplier, 
+        selectivity = selectivity,
+        SSBrel_all = median(qnts$ssb[, ac(101:200)]/c(Bmsy)),
+        SSBrel_long = median(qnts$ssb[, ac(151:200)]/c(Bmsy)),
+        Frel_all = median(qnts$fbar[, ac(101:200)]/c(Bmsy)),
+        Frel_long = median(qnts$fbar[, ac(151:200)]/c(Bmsy)),
+        Catchrel_all = median(qnts$catch[, ac(101:200)]/c(MSY)),
+        Catchrel_long = median(qnts$catch[, ac(151:200)]/c(MSY)),
+        riskBlim_all = mean(qnts$ssb[, ac(101:200)] < Blim),
+        riskBlim_long = mean(qnts$ssb[, ac(151:200)] < Blim)
+      )
+      return(df_i)
+  }
+  
+  ### get same for default selectivity
+  stats_default <- readRDS("output/fcc/mult_smry.rds")
+  stats_default <- stats_default %>%
+    filter(stock == "pol") %>%
+    mutate(selectivity = "default")
+  
+  ### combine and save
+  stats <- bind_rows(stats_dome, stats_default)
+  saveRDS(stats, "output/fcc/pol_dome_vs_default_mult.rds")
+}
+stats <- readRDS("output/fcc/pol_dome_vs_default_mult.rds")
+
+### plot
+stats_plot <- stats %>%
+  mutate(selectivity = factor(selectivity, 
+                              levels = c("default", "default_dome"),
+                              labels = c("default", "dome-shaped")),
+         fhist = factor(fhist, levels = c("one-way", "roller-coaster", 
+                                          "random")))
+p_risk <- stats_plot %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = riskBlim_long, 
+                colour = selectivity, linetype = selectivity)) +
+  scale_colour_brewer("Selectivity", palette = "Dark2") +
+  scale_linetype("Selectivity") +
+  geom_hline(yintercept = 0.05, colour = "red", linetype = "2222") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = expression(B[lim]~risk)) +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, 0.5), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+p_catch <- stats_plot %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = Catchrel_long, 
+                colour = selectivity, linetype = selectivity)) +
+  scale_colour_brewer("Selectivity", palette = "Dark2") +
+  scale_linetype("Selectivity") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = "Catch/MSY") +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, 1), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        strip.text = element_blank())
+p_ssb <- stats_plot %>%
+  ggplot() +
+  geom_vline(xintercept = 1, colour = "#444", linetype = "1111") +
+  geom_line(aes(x = multiplier, y = SSBrel_long, 
+                colour = selectivity, linetype = selectivity)) +
+  scale_colour_brewer("Selectivity", palette = "Dark2") +
+  scale_linetype("Selectivity") +
+  facet_wrap(~ fhist, nrow = 1) + 
+  labs(y = expression(SSB/B[MSY]), x = "Multiplier") +
+  coord_cartesian(xlim = c(0, 1.99), ylim = c(0, NA), expand = FALSE) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        strip.text = element_blank())
+
+(p <- p_risk + p_catch + p_ssb + 
+    plot_layout(ncol = 1, guides = "collect"))
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_dome_mult_fhist.png",
+       type = "cairo-png", plot = p,
+       width = 16, height = 10, units = "cm", dpi = 600)
+
+### compare selectivity curves
+df_sel <- data.frame(age = 1:16,
+                     default = c(brps[["pol"]]@landings.sel),
+                     dome = c(brps_dome[["pol"]]@landings.sel))
+df_sel <- df_sel %>%
+  mutate(default = default/max(default),
+         dome = dome/max(dome)) %>%
+  pivot_longer(-age) %>%
+  mutate(name = factor(name, levels = c("default", "dome"),
+                       labels = c("default", "dome-shaped")))
+
+df_sel %>%
+  ggplot(aes(x = age, y = value, colour = name, shape = name)) +
+  geom_line() + geom_point() +
+  scale_colour_brewer("Selectivity", palette = "Dark2") +
+  scale_shape("Selectivity") +
+  labs(x = "Age (years)", y = expression("Selectivity "*F[a]*"/max("*F[a]*")")) +
+  theme_bw(base_size = 8) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.8, 0.7),
+        legend.key.height = unit(0.6, "lines"),
+        legend.background = element_blank())
+ggsave(filename = "output/plots/fcc/WKLIFE15/pol_dome_selectivity.png",
+       type = "cairo-png", 
+       width = 8, height = 5, units = "cm", dpi = 600)
+
