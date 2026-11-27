@@ -106,8 +106,8 @@ stocks <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
 
 ### BRPs from Fischer et al. (2020)
 ### -> use updated version
-brps <- readRDS("input/brps_new.rds")
-brps_dome <- readRDS("input/brps_dome_new.rds")
+brps <- readRDS("input/brps_len.rds")
+brps_dome <- readRDS("input/brps_dome_len.rds")
 
 ### create FLStocks
 stocks_subset <- stocks$stock[stock_id]#"bll"
@@ -154,16 +154,16 @@ if (exists("OM")) {
       set.seed(0)
       residuals(stk_sr) <- rlnoise(dim(stk)[6], rec(stk) %=% mu, 
                                    sd = sR, b = 0)
-      ### replicate residuals from GA paper
-      set.seed(0)
-      residuals(stk_sr)[, ac(0:150)] <- rlnoise(dim(stk)[6], 
-                                                rec(stk)[, ac(0:150)] %=% mu,
-                                                sd = sR, b = 0)
-      ### replicate residuals from catch rule paper for historical period
-      set.seed(0)
-      residuals <- rlnoise(dim(stk)[6], (rec(stk) %=% mu)[, ac(1:100)], 
-                           sd = sR, b = 0)
-      residuals(stk_sr)[, ac(1:100)] <- residuals[, ac(1:100)]
+      # ### replicate residuals from GA paper
+      # set.seed(0)
+      # residuals(stk_sr)[, ac(0:150)] <- rlnoise(dim(stk)[6], 
+      #                                           rec(stk)[, ac(0:150)] %=% mu,
+      #                                           sd = sR, b = 0)
+      # ### replicate residuals from catch rule paper for historical period
+      # set.seed(0)
+      # residuals <- rlnoise(dim(stk)[6], (rec(stk) %=% mu)[, ac(1:100)], 
+      #                      sd = sR, b = 0)
+      # residuals(stk_sr)[, ac(1:100)] <- residuals[, ac(1:100)]
       
       ### fishing history from previous paper
       if (isTRUE(fhist == "one-way")) {
@@ -218,6 +218,7 @@ if (exists("OM")) {
                      switch(selectivity, 
                             "default" = "OM",
                             "dome" = "OM_dome"), 
+                     "_len",
                      "/", fhist, "/", stock, "/")
       dir.create(path, recursive = TRUE)
       
@@ -254,3 +255,137 @@ if (exists("OM")) {
 # if (!isFALSE(cl)) clusterEvalQ(cl, {gc()})
 stopCluster(cl)
 gc()
+
+
+### ------------------------------------------------------------------------ ###
+### tmp - explore length stuff ####
+### ------------------------------------------------------------------------ ###
+req_pckgs <- c("FLCore", "FLasher", "FLBRP", "mse", "FLife", 
+               "tidyr", "dplyr", "foreach", "doParallel")
+for (i in req_pckgs) library(package = i, character.only = TRUE)
+library(FLRef)
+
+source("funs.R")
+source("funs_lcc.R")
+
+brp <- readRDS("input/brps_len.rds")[["pol"]]
+stk_stf <- readRDS("input/500_100/OM_len/one-way/pol/stk.rds")
+stk_sr <- readRDS("input/500_100/OM_len/one-way/pol/sr.rds")
+
+# sweep(harvest(stk_stf), 2, apply(harvest(stk_stf), 2, max, na.rm = TRUE), "/")[, ac(50)]
+
+
+gear <- attr(brp, "gear")
+set.seed(1)
+len_sim <- lfd.sim(catch.n(stk_stf[, ac(100)]), gear = gear[[1]], scale = FALSE)
+
+as.data.frame(FLCore::iter(len_sim, 1)) %>%
+  ggplot(aes(x = len, y = data)) +
+  geom_line()
+as.data.frame(FLCore::iter(len_sim, 1:5)) %>%
+  ggplot(aes(x = len, y = data, colour = iter)) +
+  geom_line()
+as.data.frame(FLCore::iter(len_sim, 1:500)) %>%
+  ggplot(aes(x = len, y = data, group = iter)) +
+  geom_line(alpha = 0.05)
+
+
+res_length <- rUnif_lfd(gear, years = 0:200, nsim = dim(stk_stf)[6], seed = 123)
+
+cn <- catch.n(stk_stf[, ac(1:100)])
+cn[cn <= 0] <- sqrt(.Machine$double.eps)
+
+
+len_sim_full <- lfd.sim(object = cn[, ac(50:100)], 
+                        gear = gear[[1]], 
+                        ess_age = gear[[1]]$ess_age,
+                        ess_len = gear[[1]]$ess_len,
+                        scale = FALSE,
+                        u_age = res_length$age$dome,
+                        u_len = res_length$len$dome
+)
+saveRDS(object = len_sim_full, 
+        file = "input/500_100/OM_len/one-way/pol/lfd.rds")
+
+len_sim <- lfd.sim(object = cn[, ac(99:100)], 
+                   gear = gear[[1]], 
+                   ess_age = gear[[1]]$ess_age,
+                   ess_len = gear[[1]]$ess_len,
+                   scale = FALSE,
+                   u_age = res_length$age$dome,
+                   u_len = res_length$len$dome
+                   )
+oem_obs_len <- window(len_sim, end = 200)
+
+
+### operating model ####
+stk <- stk_stf
+sr <- stk_sr
+stk <- window(stk, start = 50)
+sr@residuals <- window(sr@residuals, start = 50)
+om <- FLom(stock = stk, ### stock 
+           sr = sr, ### stock recruitment and precompiled residuals
+           fleetBehaviour = mseCtrl(),
+           projection = mseCtrl(method = fwd_attr))
+
+
+oem_observations <- list(
+  stk = stk, 
+  idx = FLIndices(LFD = FLIndex(index = oem_obs_len,
+                                plusgroup = NA)))
+validObject(oem_observations)
+validObject(oem_observations$idx)
+
+oem <- FLoem(observations = oem_observations, 
+             deviances = list(lfd = res_length),
+             method = oem_lfd_sampling,
+             args = list(gear = gear,
+                         ess_age = 50,
+                         ess_len = 500))
+
+ctrl <- mpCtrl(list(
+  est = mseCtrl(method = est_lfd_lcc,
+                args = list(Linf = c(gear$dome$lhpar["linf"]))),
+  phcr = mseCtrl(method = phcr_lfd_lcc,
+                 args = list(m = 1, 
+                             s_target = 2.2, 
+                             catch_limit = 50)),
+  hcr = mseCtrl(method = hcr_lcc_lfd,
+                args = list(interval = 2,
+                            upper_constraint = 1.2,
+                            lower_constraint = 0.7))
+))
+
+args <- list(fy = 200, y0 = 75, iy = 100)
+
+
+debug(mp)
+undebug(mp)
+debug(goFish, signature = "FLom")
+undebug(goFish, signature = "FLom")
+#debugonce(oem@method)
+debugonce(ctrl$est@method)
+debugonce(ctrl$phcr@method)
+debug(ctrl$phcr@method)
+undebug(ctrl$phcr@method)
+debugonce(ctrl$hcr@method)
+res <- mp(om = om, oem = oem, args = args, ctrl = ctrl,
+          parallel = FALSE)
+
+
+debugonce(ctrl.oem$method)
+o.out <- ctrl.oem$method(stk = ctrl.oem$stk, observations = ctrl.oem$observations, deviances = ctrl.oem$deviances, args = ctrl.oem$args, tracking = ctrl.oem$tracking, gears = ctrl.oem$gear, ess_age = ctrl.oem$ess_age, ess_len = ctrl.oem$ess_len)
+
+debugonce(ctrl.est$method)
+out.assess <- ctrl.est$method(stk = ctrl.est$stk, idx = ctrl.est$idx, args = ctrl.est$args, tracking = ctrl.est$tracking, Linf = ctrl.est$Linf)
+
+
+source("funs_OM.R")
+debug(input_mp_lcc)
+undebug(input_mp_lcc)
+
+input <- input_mp_lcc(stock = "pol", fhist = "one-way", 
+                      interval = 2, multiplier = 1, 
+                      upper_constraint = 1.2, lower_constraint = 0.7,
+                      catch_limit = 0.5)
+res <- do.call(mp, input)
