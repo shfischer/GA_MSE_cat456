@@ -729,3 +729,253 @@ input_mp <- function(stocks,
 }
 
 
+### ------------------------------------------------------------------------ ###
+### function for preparing OM input for MP - lcc ####
+### ------------------------------------------------------------------------ ###
+
+input_mp_lcc <- function(
+  stock, 
+  fhist, ### fishing history, e.g. "one-way"
+  selectivity = "default", ### selectivity default/dome
+  n_iter = 500, ### number of iterations
+  n_yrs = 50, ### number of years for MP
+  MP = "lcc", ### e.g. "hr", "constant_catch", "CC_f"
+  hist_yr_min = 50, ### first year
+  scenario = "",
+  n_blocks = 1, 
+  ### length sampling (effective sample size)
+  ess_age = 50, ### 1st step for sampling from ages
+  ess_len = 500, ### 2nd step for sampling lengths
+  ### catch observation uncertainty
+  sigmaC = 0,
+  ### Catch implementation uncertainty
+  sigmaIEM = 0,
+  ### recruitment variability
+  rec_bias_correction = TRUE,
+  sigmaR = 0.6,
+  sigmaR_rho = 0,
+  ### recruitment steepness
+  steepness = 0.75,
+  ### MP
+  multiplier = 1, 
+  interval = 2, ### TAC interval
+  upper_constraint = 1.2, ### uncertainty cap
+  lower_constraint = 0.7, 
+  catch_limit = 0.5, ### percentile of historical catches
+  ...
+) {
+  
+  ### load life-history parameters
+  if (identical(selectivity, "default")) {
+    brps <- readRDS("input/brps_len.rds")
+  } else if (identical(selectivity, "dome")) {
+    brps <- readRDS("input/brps_dome_len.rds")
+  }
+  
+  stocks_lh <- read.csv("input/stocks.csv", stringsAsFactors = FALSE)
+  
+  ### stock ID
+  if (is.numeric(stock)) stock <- stocks_lh$stock[stock]
+  
+  lhist <- stocks_lh[stocks_lh$stock == stock, ]
+  ### get reference points
+  refpts <- refpts(brps[[stock]])
+  Blim <- attr(brps[[stock]], "Blim")
+  
+  ### load stock & sr
+  stk <- readRDS(paste0("input/", n_iter, "_", 100, 
+                        switch(selectivity, 
+                               "default" = "/OM_len/",
+                               "dome" = "/OM_len_dome/"),
+                        fhist, "/",
+                        stock, "/stk.rds"))
+  sr <- readRDS(paste0("input/", n_iter, "_", 100, 
+                       switch(selectivity, 
+                              "default" = "/OM_len/",
+                              "dome" = "/OM_len_dome/"),
+                       fhist, "/", stock, "/sr.rds"))
+  
+  ### adapt recruitment variability if needed #####
+  if (isTRUE(!identical(sigmaR, 0.6) | !identical(sigmaR_rho, 0))) {
+    ### bias correction
+    if (isTRUE(rec_bias_correction)) {
+      mu <- 0 - (sigmaR^2)/2
+    } else {
+      sigma <- sigmaR
+      mu <- 0
+    }
+    ### create recruitment residuals for projection period
+    set.seed(0)
+    residuals(sr) <- rlnoise(n_iter, rec(stk) %=% mu, 
+                             sd = sigma, b = sigmaR_rho)
+  }
+  
+  ### cut off history
+  stk <- window(stk, start = hist_yr_min)
+  sr@residuals <- window(sr@residuals, start = hist_yr_min)
+  
+  ### years for projection
+  stk <- window(stk, end = 100 + n_yrs)
+  sr@residuals <- window(sr@residuals, end = 100 + n_yrs)
+  
+  ### adapt recruitment steepness if needed #####
+  if (!identical(steepness, 0.75)) {
+    ### calculate new recruitment model parameters with new steepness
+    alpha <- (4*steepness*c(refpts["virgin", "rec"])) /
+      (5*steepness - 1)
+    beta <- (c(refpts["virgin", "ssb"]) * (1 - steepness)) /
+      (5*steepness - 1)
+    ### insert values
+    params(sr)[] <- c(alpha, beta)
+  }
+  
+  ### operating model ####
+  om <- FLom(stock = stk, ### stock 
+             sr = sr, ### stock recruitment and precompiled residuals
+             fleetBehaviour = mseCtrl(),
+             projection = mseCtrl(method = fwd_attr))
+  
+  ### generate historical length data
+  ### object with gear definition
+  gear <- attr(brp, "gear")
+  ### random number seeds for length sampling
+  ### 1st create full year range and later subset to those used
+  res_length <- rUnif_lfd(gear, 
+                          years = seq(from = range(stk)[["minyear"]],
+                                      to = 200), 
+                          nsim = dim(stk)[6], 
+                          seed = 123)
+  res_length <- lapply(res_length, function(x) {
+    x[[1]][, dimnames(stk)$year, ]
+  })
+  ### catch numbers at age
+  cn <- window(catch.n(stk), end = 100)
+  cn[cn <= 0] <- sqrt(.Machine$double.eps)
+  ### simulate length data (reproducible)
+  lfd_file <- paste0("input/", n_iter, "_", 100, 
+                     switch(selectivity, 
+                            "default" = "/OM_len/",
+                            "dome" = "/OM_len_dome/"),
+                     fhist, "/",
+                     stock, "/lfd.rds")
+  if (file.exists(lfd_file)) {
+    len_sim <- readRDS(lfd_file)
+  } else {
+    len_sim <- lfd.sim(object = cn, 
+                       gear = gear[[1]], 
+                       ess_age = ess_age,
+                       ess_len = ess_len,
+                       scale = FALSE,
+                       u_age = res_length$age,
+                       u_len = res_length$len
+    )
+  }
+  
+  ### calculate catch curve slope for all years and iterations
+  idx_s <- lcc_fun(len_data = len_sim, Linf = lhist$linf)
+
+  ### calculate length at first capture
+  Lc <- apply(len_sim, MARGIN = c(2:6), function(x) {
+    #browser()
+    ### find position of first length class at or above half mode abundance
+    lc_pos <- head(which(x >= (max(x, na.rm = TRUE)/2)), 1)
+    ### Lc
+    lc <- an(names(x)[lc_pos])
+    if (is.na(lc)) {
+      return(an(names(x)[1]))
+    } else {
+      return(lc)
+    }
+  })
+  Lc <- median(Lc)
+  
+  ### calculate mean length and find reference years with L >= LF=M
+  Lmean <- apply(X = len_sim[an(dimnames(len_sim)$len) >= Lc, ], 
+                 MARGIN = c(2, 6), FUN = function(x) {#browser()
+    ### calculate
+    res <- weighted.mean(x = an(dimnames(x)$len), 
+                         w = ifelse(is.na(x), 0, x), na.rm = TRUE)
+    return(res)
+  })
+  ### calculate reference length FL=M
+  Lref <- c(0.75 * Lc + 0.25 * lhist$linf)
+
+  ### calculate target slope
+  ### average of slope values where catch length is above reference
+  s_target <- sapply(dimnames(stk)$iter, function(i){
+    mean(idx_s[, which((Lmean/Lref)[,,,,, i] >= 1),,,, i])
+  })
+  
+  ### OEM
+  oem_observations <- list(
+    stk = stk, 
+    idx = FLIndices(
+      LFD = FLIndex(index = window(len_sim, end = range(stk)[["maxyear"]]),
+                    plusgroup = NA)))
+  oem <- FLoem(observations = oem_observations, 
+               deviances = list(lfd = res_length),
+               method = oem_lfd_sampling,
+               args = list(gear = gear,
+                           ess_age = ess_age,
+                           ess_len = ess_len))
+  
+  ### calculate absolute catch limit
+  ### based on percentile of historical catches
+  if (isTRUE(catch_limit > 0)) {
+    catch_limit_val <- c(apply(window(catch(stk), end = 100), 6, quantile, 
+                               probs = catch_limit))
+  } else {
+    catch_limit_val <- Inf
+  }
+
+  ### MP
+  ctrl <- mpCtrl(list(
+    est = mseCtrl(method = est_lfd_lcc,
+                  args = list(Linf = c(lhist$linf))),
+    phcr = mseCtrl(method = phcr_lfd_lcc,
+                   args = list(m = multiplier, 
+                               s_target = s_target, 
+                               catch_limit = catch_limit_val)),
+    hcr = mseCtrl(method = hcr_lcc_lfd,
+                  args = list(interval = interval,
+                              upper_constraint = upper_constraint,
+                              lower_constraint = lower_constraint))
+  ))
+  
+  ### Implementation error model (IEM) ####
+  set.seed(205)
+  iem_dev <- FLQuant(rlnoise(n = dims(stk)$iter,  catch(stk) %=% 0,
+                             sd = sigmaIEM, b = 0))
+  ### iem object
+  iem <- FLiem(method = iem_comps,
+               args = list(use_dev = ifelse(isTRUE(sigmaIEM > 0),
+                                            TRUE, FALSE), 
+                           iem_dev = iem_dev))
+  
+  ### args
+  args <- list(fy = dims(stk)$maxyear, ### final simulation year
+               y0 = dims(stk)$minyear, ### first data year
+               iy = 100, ### first simulation (intermediate) year
+               nsqy = 3, ### not used, but has to provided
+               nblocks = n_blocks, ### block for parallel processing
+               seed = 1, ### random number seed before starting MSE
+               seed_part = FALSE
+  )
+  
+  ### list with input object for mp() ####
+  input <- list(om = om, 
+                oem = oem, 
+                iem = iem, 
+                ctrl = ctrl, 
+                args = args,
+                scenario = scenario, 
+                verbose = TRUE,
+                parallel = n_blocks)
+  attr(input, "refpts") <- refpts
+  attr(input, "Blim") <- Blim
+  
+  return(input)
+
+}
+
+
